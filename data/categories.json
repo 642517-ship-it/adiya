@@ -1,0 +1,10 @@
+[
+  { "id": "morning",  "name": "أذكار الصباح" },
+  { "id": "evening",  "name": "أذكار المساء" },
+  { "id": "rizq",     "name": "الرزق" },
+  { "id": "health",   "name": "الصحة والشفاء" },
+  { "id": "marriage", "name": "الزواج" },
+  { "id": "travel",   "name": "السفر" },
+  { "id": "distress", "name": "الهمّ والكرب" },
+  { "id": "general",  "name": "أدعية عامة" }
+]

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang='ar' dir='rtl'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<meta name='theme-color' content='#0E1626'>
+<title>الأدعية</title>
+<link rel='preconnect' href='https://fonts.googleapis.com'>
+<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
+<link href='https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap' rel='stylesheet'>
+<style>
+:root{--bg:#0E1626;--panel:#16223A;--panel2:#1D2C49;--line:#27385C;--text:#ECE7DC;--muted:#8B9CBA;--accent:#8E9BE0;--r:14px}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arabic',system-ui,-apple-system,sans-serif;line-height:1.6}
+.sky{height:3px;background:linear-gradient(90deg,transparent,var(--accent),transparent);transition:background .6s}
+.wrap{max-width:760px;margin:0 auto;padding:0 18px 64px}
+header{padding:24px 0 4px}
+.brand{font-family:Amiri,serif;font-size:30px;font-weight:700}
+.now{display:flex;align-items:center;gap:14px;width:100%;margin-top:14px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);color:inherit;font:inherit;cursor:pointer;text-align:right;transition:border-color .2s}
+.now:hover{border-color:var(--accent)}
+.now-label{display:block;font-size:12px;color:var(--muted)}
+.now-text{display:block;font-size:15px;font-weight:500}
+.arc{flex:none}
+.arc path{stroke:var(--line);stroke-width:2;fill:none}
+.arc circle{fill:var(--accent);transition:fill .6s}
+.tools{display:flex;flex-direction:column;gap:12px;margin:20px 0}
+input[type=search]{width:100%;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);color:var(--text);font:inherit}
+input[type=search]::placeholder{color:var(--muted)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:7px 14px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--muted);font:inherit;font-size:14px;cursor:pointer;transition:.2s}
+.chip:hover{color:var(--text)}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#0E1626;font-weight:600}
+.dua{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:14px}
+.dua p{font-family:Amiri,serif;font-size:23px;line-height:2.05;margin:0 0 16px}
+.meta{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.tag{padding:3px 9px;background:var(--panel2);border-radius:999px}
+.acts{display:flex;gap:8px}
+.act{padding:6px 12px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;transition:.2s}
+.act:hover{color:var(--text);border-color:var(--accent)}
+.act[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+.empty{padding:48px 0;text-align:center;color:var(--muted)}
+.count{margin:22px 0 0;text-align:center;font-size:13px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:480px){.dua p{font-size:21px}.brand{font-size:26px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class='sky'></div>
+<div class='wrap'>
+<header>
+  <div class='brand'>الأدعية</div>
+  <button class='now' id='now'>
+    <svg class='arc' width='64' height='38' viewBox='0 0 64 38' aria-hidden='true'>
+      <path d='M6 33 A26 26 0 0 1 58 33'></path>
+      <circle id='sun' cx='58' cy='33' r='4'></circle>
+    </svg>
+    <span>
+      <span class='now-label'>الآن</span>
+      <span class='now-text' id='nowText'>…</span>
+    </span>
+  </button>
+</header>
+<div class='tools'>
+  <input type='search' id='q' placeholder='ابحث في الأدعية…' aria-label='بحث'>
+  <div class='chips' id='chips'></div>
+</div>
+<div id='list'></div>
+<p class='count' id='count'></p>
+</div>
+<script>
+var CAT={},state={duas:[],cats:[],active:'all',q:'',favs:new Set()};
+try{state.favs=new Set(JSON.parse(localStorage.getItem('adiya:favs')||'[]'))}catch(e){}
+
+function timeInfo(){
+  var d=new Date(),h=d.getHours(),t;
+  if(h>=4&&h<7)t={a:'#E8A0A8',s:'الفجر — وقت أذكار الصباح',c:'morning'};
+  else if(h>=7&&h<12)t={a:'#7FC7C2',s:'الصباح — أذكار الصباح',c:'morning'};
+  else if(h>=12&&h<16)t={a:'#EBC46A',s:'الظهيرة — أدعية عامة',c:'general'};
+  else if(h>=16&&h<19)t={a:'#E08D5A',s:'المساء — أذكار المساء',c:'evening'};
+  else t={a:'#8E9BE0',s:'الليل — أذكار المساء',c:'evening'};
+  t.frac=(h*60+d.getMinutes())/1440;
+  return t;
+}
+
+var T=timeInfo();
+document.documentElement.style.setProperty('--accent',T.a);
+document.getElementById('nowText').textContent=T.s;
+var sun=document.getElementById('sun');
+sun.setAttribute('cx',(32+26*Math.cos(Math.PI*T.frac)).toFixed(1));
+sun.setAttribute('cy',(33-26*Math.sin(Math.PI*T.frac)).toFixed(1));
+document.getElementById('now').addEventListener('click',function(){state.active=T.c;render()});
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function chips(){
+  var box=document.getElementById('chips'),items=[{id:'all',name:'الكل'},{id:'fav',name:'المفضّلة'}].concat(state.cats);
+  box.innerHTML='';
+  items.forEach(function(c){
+    var b=document.createElement('button');
+    b.className='chip';b.textContent=c.name;
+    b.setAttribute('aria-pressed',state.active===c.id);
+    b.addEventListener('click',function(){state.active=c.id;render()});
+    box.appendChild(b);
+  });
+}
+
+function match(d){
+  if(state.q&&d.text.indexOf(state.q)<0)return false;
+  if(state.active==='all')return true;
+  if(state.active==='fav')return state.favs.has(d.id);
+  return d.categories.indexOf(state.active)>=0;
+}
+
+function render(){
+  chips();
+  var list=document.getElementById('list'),rows=state.duas.filter(match);
+  if(!rows.length){
+    list.innerHTML='<div class="empty">لا يوجد دعاء مطابق. جرّب تصنيفًا آخر أو كلمة أقصر.</div>';
+  }else{
+    list.innerHTML=rows.map(function(d){
+      var tags=d.categories.map(function(c){return '<span class="tag">'+esc(CAT[c]||c)+'</span>'}).join('');
+      if(d.source)tags+='<span class="tag">'+esc(d.source)+'</span>';
+      var on=state.favs.has(d.id);
+      return '<article class="dua"><p>'+esc(d.text)+'</p><div class="meta"><div class="tags">'+tags+'</div><div class="acts">'+
+        '<button class="act" data-copy="'+d.id+'">نسخ</button>'+
+        '<button class="act" data-fav="'+d.id+'" aria-pressed="'+on+'">'+(on?'★ مفضّل':'☆ مفضّلة')+'</button>'+
+        '</div></div></article>';
+    }).join('');
+  }
+  document.getElementById('count').textContent=rows.length+' من '+state.duas.length+' دعاء';
+}
+
+document.getElementById('list').addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b)return;
+  var fid=b.getAttribute('data-fav'),cid=b.getAttribute('data-copy');
+  if(fid){
+    var id=Number(fid);
+    state.favs.has(id)?state.favs.delete(id):state.favs.add(id);
+    try{localStorage.setItem('adiya:favs',JSON.stringify([].slice.call(state.favs)))}catch(e){}
+    render();
+  }else if(cid){
+    var d=state.duas.find(function(x){return x.id===Number(cid)});
+    navigator.clipboard.writeText(d.text).then(function(){
+      b.textContent='نُسخ';setTimeout(function(){b.textContent='نسخ'},1400);
+    });
+  }
+});
+
+document.getElementById('q').addEventListener('input',function(e){state.q=e.target.value.trim();render()});
+
+Promise.all([
+  fetch('data/categories.json').then(function(r){return r.json()}),
+  fetch('data/duas.json').then(function(r){return r.json()})
+]).then(function(res){
+  state.cats=res[0];state.duas=res[1];
+  state.cats.forEach(function(c){CAT[c.id]=c.name});
+  state.active=T.c;
+  render();
+}).catch(function(){
+  document.getElementById('list').innerHTML='<div class="empty">تعذّر تحميل الأدعية. افتح الصفحة من خادم ويب وليس من القرص مباشرة.</div>';
+});
+</script>
+</body>
+</html>

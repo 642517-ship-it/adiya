@@ -47,6 +47,13 @@ input[type=search]::placeholder{color:var(--muted)}
 .tags{display:flex;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 .tag{padding:3px 9px;background:var(--panel2);border-radius:999px}
 .acts{display:flex;gap:8px}
+.counter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+.cbtn{padding:10px 22px;background:var(--accent);border:1px solid var(--accent);border-radius:999px;color:#0E1626;font:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:.15s}
+.cbtn:active{transform:scale(.96)}
+.cnum{font-variant-numeric:tabular-nums;font-size:15px;color:var(--muted)}
+.cnum.done{color:var(--accent);font-weight:600}
+.creset{padding:6px 12px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+.creset:hover{color:var(--text);border-color:var(--accent)}
 .act{padding:6px 12px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;transition:.2s}
 .act:hover{color:var(--text);border-color:var(--accent)}
 .act[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
@@ -98,9 +105,11 @@ input[type=search]::placeholder{color:var(--muted)}
 </div>
 
 <script>
-var CAT={},state={duas:[],cats:[],active:'all',q:'',favs:new Set(),off:0};
+var CAT={},state={duas:[],cats:[],active:'all',q:'',favs:new Set(),off:0,counts:{}};
+var CAP=7;
 try{state.favs=new Set(JSON.parse(localStorage.getItem('adiya:favs')||'[]'))}catch(e){}
 try{state.off=Number(localStorage.getItem('adiya:hijriOffset')||0)||0}catch(e){}
+try{state.counts=JSON.parse(localStorage.getItem('adiya:counts')||'{}')||{}}catch(e){}
 
 var HMONTH=['محرم','صفر','ربيع الأول','ربيع الآخر','جمادى الأولى','جمادى الآخرة','رجب','شعبان','رمضان','شوال','ذو القعدة','ذو الحجة'];
 var PBUH='\uFDFA';
@@ -183,7 +192,17 @@ function occasionOf(h,greg){
 
 function card(d){
   var n=d.repeat>1?d.repeat:1,body='',t=salla(d.text,d.source);
-  for(var i=0;i<n;i++)body+='<p>'+esc(t)+'</p>';
+  if(n>CAP){
+    var c=state.counts[d.id]||0;
+    body='<p>'+esc(t)+'</p>'+
+      '<div class="counter">'+
+      '<button class="cbtn" data-count="'+d.id+'">سبِّح</button>'+
+      '<span class="cnum'+(c>=n?' done':'')+'" id="cnt'+d.id+'">'+c+' / '+n+'</span>'+
+      '<button class="creset" data-creset="'+d.id+'">تصفير</button>'+
+      '</div>';
+  }else{
+    for(var i=0;i<n;i++)body+='<p>'+esc(t)+'</p>';
+  }
   var tags=d.categories.map(function(c){return '<span class="tag">'+esc(CAT[c]||c)+'</span>'}).join('');
   if(d.source)tags+='<span class="tag">'+esc(d.source)+'</span>';
   var on=state.favs.has(d.id);
@@ -292,7 +311,16 @@ document.getElementById('plus').addEventListener('click',function(){setOff(state
 
 document.body.addEventListener('click',function(e){
   var b=e.target.closest('button');if(!b)return;
-  var fid=b.getAttribute('data-fav'),cid=b.getAttribute('data-copy');
+  var fid=b.getAttribute('data-fav'),cid=b.getAttribute('data-copy'),
+      nid=b.getAttribute('data-count'),rid=b.getAttribute('data-creset');
+  if(nid||rid){
+    var id=Number(nid||rid),dd=state.duas.filter(function(x){return x.id===id})[0],max=dd.repeat;
+    state.counts[id]=rid?0:Math.min(max,(state.counts[id]||0)+1);
+    var el=document.getElementById('cnt'+id);
+    if(el){el.textContent=state.counts[id]+' / '+max;el.className='cnum'+(state.counts[id]>=max?' done':'')}
+    try{localStorage.setItem('adiya:counts',JSON.stringify(state.counts))}catch(e){}
+    return;
+  }
   if(fid){
     var id=Number(fid);
     state.favs.has(id)?state.favs.delete(id):state.favs.add(id);
@@ -301,7 +329,8 @@ document.body.addEventListener('click',function(e){
   }else if(cid){
     var d=state.duas.filter(function(x){return x.id===Number(cid)})[0];
     var n=d.repeat>1?d.repeat:1,out=[],t=salla(d.text,d.source);
-    for(var i=0;i<n;i++)out.push(t);
+    if(n>CAP){out.push(t+'  ('+n+' مرّة)')}
+    else{for(var i=0;i<n;i++)out.push(t)}
     navigator.clipboard.writeText(out.join('\n')).then(function(){
       b.textContent='نُسخ';setTimeout(function(){b.textContent='نسخ'},1400);
     });

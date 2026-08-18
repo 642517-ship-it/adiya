@@ -30,7 +30,10 @@ header{padding:24px 0 0}
 .tools{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
 input[type=search]{width:100%;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);color:var(--text);font:inherit}
 input[type=search]::placeholder{color:var(--muted)}
-.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.chipsbar{display:flex;align-items:center;gap:6px}
+.arrow{flex:none;width:30px;height:30px;display:grid;place-items:center;background:var(--panel);border:1px solid var(--line);border-radius:999px;color:var(--muted);font:inherit;font-size:17px;line-height:1;cursor:pointer;transition:.2s}
+.arrow:hover{color:var(--text);border-color:var(--accent)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;scroll-behavior:smooth;flex:1}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;padding:7px 14px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--muted);font:inherit;font-size:14px;cursor:pointer;transition:.2s}
 .chip:hover{color:var(--text)}
@@ -83,7 +86,11 @@ input[type=search]::placeholder{color:var(--muted)}
 <section id='viewBrowse' hidden>
   <div class='tools'>
     <input type='search' id='q' placeholder='ابحث في الأدعية…' aria-label='بحث'>
-    <div class='chips' id='chips'></div>
+    <div class='chipsbar'>
+      <button class='arrow' id='chipPrev' aria-label='المجموعات السابقة' hidden>›</button>
+      <div class='chips' id='chips'></div>
+      <button class='arrow' id='chipNext' aria-label='المجموعات التالية' hidden>‹</button>
+    </div>
   </div>
   <div id='browseList'></div>
   <p class='count' id='count'></p>
@@ -96,8 +103,28 @@ try{state.favs=new Set(JSON.parse(localStorage.getItem('adiya:favs')||'[]'))}cat
 try{state.off=Number(localStorage.getItem('adiya:hijriOffset')||0)||0}catch(e){}
 
 var HMONTH=['محرم','صفر','ربيع الأول','ربيع الآخر','جمادى الأولى','جمادى الآخرة','رجب','شعبان','رمضان','شوال','ذو القعدة','ذو الحجة'];
+var PBUH='\uFDFA';
+var TASH=/[\u064B-\u0652\u0670\u0640]/g;
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function bare(s){return String(s).replace(TASH,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')}
+
+/* ---- الصلاة على النبي ﷺ بعد كل ذكر له ---- */
+var H='[\u064B-\u0652\u0670\u0640]*';
+function pat(w){return w.split('').map(function(c){return c===' '?'\\s+':c}).join(H)+H}
+var NAMES=['رسول الله','النبي','نبينا','نبيك','نبيه','الرسول','محمدا','محمد'];
+var RE_NAME=new RegExp('('+NAMES.map(pat).join('|')+')(?![\u0621-\u064A])','g');
+var SKIP=['صلي الله عليه','\uFDFA','السلام عليك ايها النبي','اللهم صل علي محمد','صل وسلم','عليه السلام','صلي الله علي'];
+var RE_VERSE=/^[\u0600-\u06FF\s]+\s[\u0660-\u0669\d]+(\s*[-\u2013]\s*[\u0660-\u0669\d]+)?$/;
+
+function isQuran(src){var b=bare(src||'').trim();return b.indexOf('القران')>=0||RE_VERSE.test(b)}
+
+function salla(t,src){
+  if(isQuran(src))return t;
+  var b=bare(t);
+  for(var i=0;i<SKIP.length;i++){if(b.indexOf(SKIP[i])>=0)return t}
+  return t.replace(RE_NAME,function(m){return m+' '+PBUH});
+}
 
 function hijriOf(date){
   try{
@@ -107,11 +134,7 @@ function hijriOf(date){
   }catch(e){return null}
 }
 
-function shifted(){
-  var d=new Date();
-  d.setDate(d.getDate()+state.off);
-  return d;
-}
+function shifted(){var d=new Date();d.setDate(d.getDate()+state.off);return d}
 
 function accentFor(h,hour){
   if(h&&h.m===9)return '#C9A227';
@@ -121,6 +144,20 @@ function accentFor(h,hour){
   if(hour>=12&&hour<16)return '#EBC46A';
   if(hour>=16&&hour<19)return '#E08D5A';
   return '#8E9BE0';
+}
+
+/* ---- تصنيفات الوقت اليومي ---- */
+function timeCats(hour){
+  if(hour>=4&&hour<7)return ['waking','morning'];
+  if(hour>=7&&hour<16)return ['morning'];
+  if(hour>=16&&hour<21)return ['evening'];
+  return ['sleep'];
+}
+function timeLabel(hour){
+  if(hour>=4&&hour<7)return 'أذكار الاستيقاظ والصباح';
+  if(hour>=7&&hour<16)return 'أذكار الصباح';
+  if(hour>=16&&hour<21)return 'أذكار المساء';
+  return 'أذكار النوم';
 }
 
 function occasionOf(h,greg){
@@ -145,8 +182,8 @@ function occasionOf(h,greg){
 }
 
 function card(d){
-  var n=d.repeat>1?d.repeat:1,body='';
-  for(var i=0;i<n;i++)body+='<p>'+esc(d.text)+'</p>';
+  var n=d.repeat>1?d.repeat:1,body='',t=salla(d.text,d.source);
+  for(var i=0;i<n;i++)body+='<p>'+esc(t)+'</p>';
   var tags=d.categories.map(function(c){return '<span class="tag">'+esc(CAT[c]||c)+'</span>'}).join('');
   if(d.source)tags+='<span class="tag">'+esc(d.source)+'</span>';
   var on=state.favs.has(d.id);
@@ -166,39 +203,64 @@ function renderToday(){
   document.getElementById('gDate').textContent=new Intl.DateTimeFormat('ar',{day:'numeric',month:'long',year:'numeric'}).format(g);
   document.getElementById('offText').textContent=state.off?'('+(state.off>0?'+':'')+state.off+')':'';
 
-  var occ=occasionOf(h,g);
-  document.getElementById('badgeBox').innerHTML=occ.label?'<span class="badge">'+esc(occ.label)+'</span>':'';
+  var occ=occasionOf(h,g),tc=timeCats(hour);
+  var badges=(occ.label?'<span class="badge">'+esc(occ.label)+'</span>':'')+
+             '<span class="badge">'+esc(timeLabel(hour))+'</span>';
+  document.getElementById('badgeBox').innerHTML=badges;
 
-  var rows=[];
+  var seen={},rows=[];
+  function push(list){list.forEach(function(d){if(!seen[d.id]){seen[d.id]=1;rows.push(d)}})}
   if(occ.cats.length){
-    rows=state.duas.filter(function(d){
+    push(state.duas.filter(function(d){
       return d.categories.some(function(c){return occ.cats.indexOf(c)>=0});
-    });
+    }));
   }
-  if(!rows.length){
-    var tcat=(hour>=4&&hour<16)?'morning':'evening';
-    rows=state.duas.filter(function(d){return d.categories.indexOf(tcat)>=0});
-    var gen=state.duas.filter(function(d){return d.categories.indexOf('general')>=0});
-    if(gen.length){
-      var day=Math.floor(g.getTime()/86400000);
-      rows=rows.concat([gen[day%gen.length]]);
-    }
+  push(state.duas.filter(function(d){
+    return d.categories.some(function(c){return tc.indexOf(c)>=0});
+  }));
+  var gen=state.duas.filter(function(d){return d.categories.indexOf('general')>=0&&!seen[d.id]});
+  if(gen.length){
+    var day=Math.floor(g.getTime()/86400000);
+    push([gen[day%gen.length]]);
   }
   document.getElementById('todayList').innerHTML=rows.length?rows.map(card).join(''):'<div class="empty">لا توجد أدعية مسجّلة لهذا اليوم بعد.</div>';
 }
 
-function renderBrowse(){
-  var box=document.getElementById('chips'),items=[{id:'all',name:'الكل'},{id:'fav',name:'المفضّلة'}].concat(state.cats);
-  box.innerHTML='';
+/* ---- شريط المجموعات ---- */
+var chipsBox=document.getElementById('chips'),
+    chipPrev=document.getElementById('chipPrev'),
+    chipNext=document.getElementById('chipNext');
+
+function updateArrows(){
+  var over=chipsBox.scrollWidth>chipsBox.clientWidth+4;
+  chipPrev.hidden=!over;chipNext.hidden=!over;
+}
+chipPrev.addEventListener('click',function(){chipsBox.scrollBy({left:220,behavior:'smooth'})});
+chipNext.addEventListener('click',function(){chipsBox.scrollBy({left:-220,behavior:'smooth'})});
+window.addEventListener('resize',updateArrows);
+
+function buildChips(){
+  var items=[{id:'all',name:'الكل'},{id:'fav',name:'المفضّلة'}].concat(state.cats);
+  chipsBox.innerHTML='';
   items.forEach(function(c){
     var b=document.createElement('button');
-    b.className='chip';b.textContent=c.name;
+    b.className='chip';b.textContent=c.name;b.dataset.cat=c.id;
     b.setAttribute('aria-pressed',state.active===c.id);
-    b.addEventListener('click',function(){state.active=c.id;renderBrowse()});
-    box.appendChild(b);
+    b.addEventListener('click',function(){state.active=c.id;markChips();renderList()});
+    chipsBox.appendChild(b);
   });
+  updateArrows();
+}
+function markChips(){
+  [].forEach.call(chipsBox.children,function(b){
+    b.setAttribute('aria-pressed',b.dataset.cat===state.active);
+  });
+}
+
+function renderList(){
+  var q=state.q;
   var rows=state.duas.filter(function(d){
-    if(state.q&&d.text.indexOf(state.q)<0)return false;
+    if(q&&d._s.indexOf(q)<0)return false;
     if(state.active==='all')return true;
     if(state.active==='fav')return state.favs.has(d.id);
     return d.categories.indexOf(state.active)>=0;
@@ -207,7 +269,7 @@ function renderBrowse(){
   document.getElementById('count').textContent=rows.length+' من '+state.duas.length+' دعاء';
 }
 
-function renderAll(){renderToday();renderBrowse()}
+function renderAll(){renderToday();markChips();renderList()}
 
 function tab(which){
   var t=which==='today';
@@ -215,6 +277,7 @@ function tab(which){
   document.getElementById('tabBrowse').setAttribute('aria-selected',!t);
   document.getElementById('viewToday').hidden=!t;
   document.getElementById('viewBrowse').hidden=t;
+  if(!t)updateArrows();
 }
 document.getElementById('tabToday').addEventListener('click',function(){tab('today')});
 document.getElementById('tabBrowse').addEventListener('click',function(){tab('browse')});
@@ -237,15 +300,17 @@ document.body.addEventListener('click',function(e){
     renderAll();
   }else if(cid){
     var d=state.duas.filter(function(x){return x.id===Number(cid)})[0];
-    var n=d.repeat>1?d.repeat:1,out=[];
-    for(var i=0;i<n;i++)out.push(d.text);
+    var n=d.repeat>1?d.repeat:1,out=[],t=salla(d.text,d.source);
+    for(var i=0;i<n;i++)out.push(t);
     navigator.clipboard.writeText(out.join('\n')).then(function(){
       b.textContent='نُسخ';setTimeout(function(){b.textContent='نسخ'},1400);
     });
   }
 });
 
-document.getElementById('q').addEventListener('input',function(e){state.q=e.target.value.trim();renderBrowse()});
+document.getElementById('q').addEventListener('input',function(e){
+  state.q=bare(e.target.value.trim());renderList();
+});
 
 Promise.all([
   fetch('data/categories.json').then(function(r){return r.json()}),
@@ -253,6 +318,11 @@ Promise.all([
 ]).then(function(res){
   state.cats=res[0];state.duas=res[1];
   state.cats.forEach(function(c){CAT[c.id]=c.name});
+  state.duas.forEach(function(d){
+    d._s=bare([d.text,d.note||'',d.source||'',
+      d.categories.map(function(c){return CAT[c]||c}).join(' ')].join(' '));
+  });
+  buildChips();
   renderAll();
 }).catch(function(){
   document.getElementById('todayList').innerHTML='<div class="empty">تعذّر تحميل الأدعية.</div>';

@@ -1,21 +1,162 @@
 [
-  { "id": "morning",        "name": "أذكار الصباح",            "kind": "time" },
-  { "id": "evening",        "name": "أذكار المساء",            "kind": "time" },
-  { "id": "ramadan",        "name": "رمضان",                  "kind": "occasion" },
-  { "id": "last-ten",       "name": "العشر الأواخر",           "kind": "occasion" },
-  { "id": "laylat-alqadr",  "name": "ليلة القدر",              "kind": "occasion" },
-  { "id": "khatm-quran",    "name": "ختم القرآن",              "kind": "occasion" },
-  { "id": "eid-fitr",       "name": "عيد الفطر",              "kind": "occasion" },
-  { "id": "dhulhijjah",     "name": "العشر من ذي الحجة",        "kind": "occasion" },
-  { "id": "arafah",         "name": "يوم عرفة",               "kind": "occasion" },
-  { "id": "eid-adha",       "name": "عيد الأضحى",             "kind": "occasion" },
-  { "id": "ashura",         "name": "عاشوراء",                "kind": "occasion" },
-  { "id": "hijri-new-year", "name": "رأس السنة الهجرية",       "kind": "occasion" },
-  { "id": "friday",         "name": "يوم الجمعة",             "kind": "occasion" },
-  { "id": "rizq",           "name": "الرزق",                   "kind": "topic" },
-  { "id": "health",         "name": "الصحة والشفاء",           "kind": "topic" },
-  { "id": "marriage",       "name": "الزواج",                  "kind": "topic" },
-  { "id": "travel",         "name": "السفر",                   "kind": "topic" },
-  { "id": "distress",       "name": "الهمّ والكرب",            "kind": "topic" },
-  { "id": "general",        "name": "أدعية عامة",             "kind": "topic" }
+  {
+    "id": "morning",
+    "name": "أذكار الصباح",
+    "kind": "time"
+  },
+  {
+    "id": "evening",
+    "name": "أذكار المساء",
+    "kind": "time"
+  },
+  {
+    "id": "waking",
+    "name": "أذكار الاستيقاظ",
+    "kind": "time"
+  },
+  {
+    "id": "sleep",
+    "name": "أذكار النوم",
+    "kind": "time"
+  },
+  {
+    "id": "ramadan",
+    "name": "رمضان",
+    "kind": "occasion"
+  },
+  {
+    "id": "last-ten",
+    "name": "العشر الأواخر",
+    "kind": "occasion"
+  },
+  {
+    "id": "laylat-alqadr",
+    "name": "ليلة القدر",
+    "kind": "occasion"
+  },
+  {
+    "id": "khatm-quran",
+    "name": "ختم القرآن",
+    "kind": "occasion"
+  },
+  {
+    "id": "eid-fitr",
+    "name": "عيد الفطر",
+    "kind": "occasion"
+  },
+  {
+    "id": "dhulhijjah",
+    "name": "العشر من ذي الحجة",
+    "kind": "occasion"
+  },
+  {
+    "id": "arafah",
+    "name": "يوم عرفة",
+    "kind": "occasion"
+  },
+  {
+    "id": "eid-adha",
+    "name": "عيد الأضحى",
+    "kind": "occasion"
+  },
+  {
+    "id": "ashura",
+    "name": "عاشوراء",
+    "kind": "occasion"
+  },
+  {
+    "id": "hijri-new-year",
+    "name": "رأس السنة الهجرية",
+    "kind": "occasion"
+  },
+  {
+    "id": "friday",
+    "name": "يوم الجمعة",
+    "kind": "occasion"
+  },
+  {
+    "id": "prayer",
+    "name": "أذكار الصلاة",
+    "kind": "topic"
+  },
+  {
+    "id": "after-prayer",
+    "name": "أذكار بعد الصلاة",
+    "kind": "topic"
+  },
+  {
+    "id": "wudu",
+    "name": "أذكار الوضوء",
+    "kind": "topic"
+  },
+  {
+    "id": "mosque",
+    "name": "أذكار المسجد",
+    "kind": "topic"
+  },
+  {
+    "id": "home",
+    "name": "أذكار المنزل",
+    "kind": "topic"
+  },
+  {
+    "id": "food",
+    "name": "أذكار الطعام",
+    "kind": "topic"
+  },
+  {
+    "id": "tasbih",
+    "name": "تسابيح",
+    "kind": "topic"
+  },
+  {
+    "id": "ruqya",
+    "name": "الرقية الشرعية",
+    "kind": "topic"
+  },
+  {
+    "id": "hajj",
+    "name": "الحج والعمرة",
+    "kind": "topic"
+  },
+  {
+    "id": "prophets",
+    "name": "أدعية الأنبياء",
+    "kind": "topic"
+  },
+  {
+    "id": "deceased",
+    "name": "أدعية للميّت",
+    "kind": "topic"
+  },
+  {
+    "id": "rizq",
+    "name": "الرزق",
+    "kind": "topic"
+  },
+  {
+    "id": "health",
+    "name": "الصحة والشفاء",
+    "kind": "topic"
+  },
+  {
+    "id": "marriage",
+    "name": "الزواج",
+    "kind": "topic"
+  },
+  {
+    "id": "travel",
+    "name": "السفر",
+    "kind": "topic"
+  },
+  {
+    "id": "distress",
+    "name": "الهمّ والكرب",
+    "kind": "topic"
+  },
+  {
+    "id": "general",
+    "name": "أدعية عامة",
+    "kind": "topic"
+  }
 ]

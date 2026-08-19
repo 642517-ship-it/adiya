@@ -47,6 +47,13 @@ input[type=search]::placeholder{color:var(--muted)}
 .tags{display:flex;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 .tag{padding:3px 9px;background:var(--panel2);border-radius:999px}
 .acts{display:flex;gap:8px}
+.clock{margin-top:8px;font-size:15px;color:var(--accent);font-variant-numeric:tabular-nums;display:flex;gap:8px;justify-content:center;align-items:center}
+.clock-sep{color:var(--muted)}
+#clockLabel{color:var(--muted)}
+.more{display:flex;flex-direction:column;align-items:center;gap:8px;margin:8px 0 28px}
+#moreBtn{padding:11px 26px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--text);font:inherit;font-size:15px;cursor:pointer;transition:.15s}
+#moreBtn:hover{border-color:var(--accent);color:var(--accent)}
+#batchInfo{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .counter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
 .cbtn{padding:10px 22px;background:var(--accent);border:1px solid var(--accent);border-radius:999px;color:#0E1626;font:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:.15s}
 .cbtn:active{transform:scale(.96)}
@@ -79,6 +86,7 @@ input[type=search]::placeholder{color:var(--muted)}
   <div class='hijri'>
     <div class='hijri-date' id='hDate'>…</div>
     <div class='hijri-greg' id='gDate'></div>
+    <div class='clock'><span id='clock'></span><span class='clock-sep'>·</span><span id='clockLabel'></span></div>
     <div id='badgeBox'></div>
     <div class='adjust'>
       <span>تعديل التاريخ الهجري:</span>
@@ -88,6 +96,7 @@ input[type=search]::placeholder{color:var(--muted)}
     </div>
   </div>
   <div id='todayList'></div>
+  <div class='more'><button id='moreBtn'>أدعية أخرى</button><span id='batchInfo'></span></div>
 </section>
 
 <section id='viewBrowse' hidden>
@@ -106,7 +115,8 @@ input[type=search]::placeholder{color:var(--muted)}
 
 <script>
 var CAT={},state={duas:[],cats:[],active:'all',q:'',favs:new Set(),off:0,counts:{}};
-var CAP=7;
+var CAP=7,PAGE=5,SLOT=30*60*1000;
+state.bump=0;state.pool=[];
 try{state.favs=new Set(JSON.parse(localStorage.getItem('adiya:favs')||'[]'))}catch(e){}
 try{state.off=Number(localStorage.getItem('adiya:hijriOffset')||0)||0}catch(e){}
 try{state.counts=JSON.parse(localStorage.getItem('adiya:counts')||'{}')||{}}catch(e){}
@@ -214,21 +224,29 @@ function card(d){
     '</div></div></article>';
 }
 
+function pad2(n){return (n<10?'0':'')+n}
+function clockText(d){
+  var h=d.getHours(),m=d.getMinutes(),ap=h<12?'ص':'م',hh=h%12;if(hh===0)hh=12;
+  return hh+':'+pad2(m)+' '+ap;
+}
+
 function renderToday(){
-  var g=shifted(),h=hijriOf(g),hour=new Date().getHours();
+  var g=shifted(),h=hijriOf(g),now=new Date(),hour=now.getHours();
   document.documentElement.style.setProperty('--accent',accentFor(h,hour));
   var wd=new Intl.DateTimeFormat('ar',{weekday:'long'}).format(g);
   document.getElementById('hDate').textContent=h?(wd+' ، '+h.d+' '+HMONTH[h.m-1]+' '+h.y+' هـ'):wd;
   document.getElementById('gDate').textContent=new Intl.DateTimeFormat('ar',{day:'numeric',month:'long',year:'numeric'}).format(g);
+  document.getElementById('clock').textContent=clockText(now);
+  document.getElementById('clockLabel').textContent=timeLabel(hour);
   document.getElementById('offText').textContent=state.off?'('+(state.off>0?'+':'')+state.off+')':'';
 
   var occ=occasionOf(h,g),tc=timeCats(hour);
-  var badges=(occ.label?'<span class="badge">'+esc(occ.label)+'</span>':'')+
-             '<span class="badge">'+esc(timeLabel(hour))+'</span>';
-  document.getElementById('badgeBox').innerHTML=badges;
+  document.getElementById('badgeBox').innerHTML=
+    (occ.label?'<span class="badge">'+esc(occ.label)+'</span>':'')+
+    '<span class="badge">'+esc(timeLabel(hour))+'</span>';
 
-  var seen={},rows=[];
-  function push(list){list.forEach(function(d){if(!seen[d.id]){seen[d.id]=1;rows.push(d)}})}
+  var seen={},pool=[];
+  function push(list){list.forEach(function(d){if(!seen[d.id]){seen[d.id]=1;pool.push(d)}})}
   if(occ.cats.length){
     push(state.duas.filter(function(d){
       return d.categories.some(function(c){return occ.cats.indexOf(c)>=0});
@@ -237,12 +255,26 @@ function renderToday(){
   push(state.duas.filter(function(d){
     return d.categories.some(function(c){return tc.indexOf(c)>=0});
   }));
-  var gen=state.duas.filter(function(d){return d.categories.indexOf('general')>=0&&!seen[d.id]});
-  if(gen.length){
-    var day=Math.floor(g.getTime()/86400000);
-    push([gen[day%gen.length]]);
+  push(state.duas.filter(function(d){return d.categories.indexOf('general')>=0}));
+  state.pool=pool;
+  renderBatch();
+}
+
+function renderBatch(){
+  var pool=state.pool,box=document.getElementById('todayList'),
+      info=document.getElementById('batchInfo'),btn=document.getElementById('moreBtn');
+  if(!pool.length){
+    box.innerHTML='<div class="empty">لا توجد أدعية مسجّلة لهذا الوقت بعد.</div>';
+    info.textContent='';btn.hidden=true;return;
   }
-  document.getElementById('todayList').innerHTML=rows.length?rows.map(card).join(''):'<div class="empty">لا توجد أدعية مسجّلة لهذا اليوم بعد.</div>';
+  var slot=Math.floor(Date.now()/SLOT),
+      pages=Math.ceil(pool.length/PAGE),
+      page=((slot+state.bump)%pages+pages)%pages,
+      start=page*PAGE,
+      rows=pool.slice(start,start+PAGE);
+  box.innerHTML=rows.map(card).join('');
+  info.textContent='مجموعة '+(page+1)+' من '+pages+' · '+pool.length+' دعاء لهذا الوقت';
+  btn.hidden=pages<2;
 }
 
 /* ---- شريط المجموعات ---- */
@@ -298,6 +330,8 @@ function tab(which){
   document.getElementById('viewBrowse').hidden=t;
   if(!t)updateArrows();
 }
+document.getElementById('moreBtn').addEventListener('click',function(){state.bump++;renderBatch();window.scrollTo({top:0,behavior:'smooth'})});
+setInterval(function(){if(!document.getElementById('viewToday').hidden)renderToday()},60000);
 document.getElementById('tabToday').addEventListener('click',function(){tab('today')});
 document.getElementById('tabBrowse').addEventListener('click',function(){tab('browse')});
 

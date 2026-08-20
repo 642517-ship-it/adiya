@@ -5,6 +5,14 @@
 <meta name='viewport' content='width=device-width,initial-scale=1'>
 <meta name='theme-color' content='#0E1626'>
 <title>الأدعية</title>
+<link rel='manifest' href='manifest.json'>
+<link rel='icon' href='icons/icon-192.png'>
+<link rel='apple-touch-icon' href='icons/icon-192.png'>
+<meta name='mobile-web-app-capable' content='yes'>
+<meta name='apple-mobile-web-app-capable' content='yes'>
+<meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'>
+<meta name='apple-mobile-web-app-title' content='الأدعية'>
+<meta name='description' content='أدعية وأذكار منظّمة حسب الوقت والمناسبة'>
 <link rel='preconnect' href='https://fonts.googleapis.com'>
 <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
 <link href='https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap' rel='stylesheet'>
@@ -105,6 +113,7 @@ input[type=search]::placeholder{color:var(--muted)}
       <span id='locName'></span>
       <button id='geoBtn'>تحديد موقعي</button>
       <button id='geoReset'>القدس</button>
+      <button id='installBtn' hidden>تثبيت التطبيق</button>
     </div>
   </div>
   <div id='todayList'></div>
@@ -483,6 +492,22 @@ Promise.all([
 }).catch(function(){
   document.getElementById('todayList').innerHTML='<div class="empty">تعذّر تحميل الأدعية.</div>';
 });
+/* ---- PWA ---- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+var deferredPrompt=null,installBtn=document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt',function(e){
+  e.preventDefault();deferredPrompt=e;installBtn.hidden=false;
+});
+installBtn.addEventListener('click',function(){
+  if(!deferredPrompt)return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(function(){deferredPrompt=null;installBtn.hidden=true});
+});
+window.addEventListener('appinstalled',function(){installBtn.hidden=true});
 </script>
 </body>
 </html>

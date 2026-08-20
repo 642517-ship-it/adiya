@@ -137,7 +137,7 @@ input[type=search]::placeholder{color:var(--muted)}
 <script>
 var CAT={},state={duas:[],cats:[],active:'all',q:'',favs:new Set(),off:0,counts:{}};
 var CAP=7,PAGE=5,SLOT=30*60*1000;
-state.bump=0;state.pool=[];
+state.bump=0;state.pool=[];state.poolLabel='';
 try{state.favs=new Set(JSON.parse(localStorage.getItem('adiya:favs')||'[]'))}catch(e){}
 try{state.off=Number(localStorage.getItem('adiya:hijriOffset')||0)||0}catch(e){}
 try{state.counts=JSON.parse(localStorage.getItem('adiya:counts')||'{}')||{}}catch(e){}
@@ -330,8 +330,12 @@ function renderToday(){
   push(state.duas.filter(function(d){
     return d.categories.some(function(c){return tc.indexOf(c)>=0});
   }));
-  push(state.duas.filter(function(d){return d.categories.indexOf('general')>=0}));
+  /* الأدعية العامّة لا تُقحَم على أذكار الوقت — تُستعمل فقط إن لم يكن للوقت أذكار */
+  if(!pool.length){
+    push(state.duas.filter(function(d){return d.categories.indexOf('general')>=0}));
+  }
   state.pool=pool;
+  state.poolLabel=timeLabel(t,p);
   renderBatch();
 }
 
@@ -362,7 +366,7 @@ function renderBatch(){
       start=page*PAGE,
       rows=pool.slice(start,start+PAGE);
   box.innerHTML=rows.map(card).join('');
-  info.textContent='مجموعة '+(page+1)+' من '+pages+' · '+pool.length+' دعاء لهذا الوقت';
+  info.textContent='مجموعة '+(page+1)+' من '+pages+' · '+pool.length+' دعاء في '+state.poolLabel;
   btn.hidden=pages<2;
 }
 

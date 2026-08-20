@@ -47,6 +47,12 @@ input[type=search]::placeholder{color:var(--muted)}
 .tags{display:flex;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 .tag{padding:3px 9px;background:var(--panel2);border-radius:999px}
 .acts{display:flex;gap:8px}
+.ptimes{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:12px 0 4px}
+.pt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;min-width:58px}
+.pt b{font-size:12px;font-weight:500;color:var(--muted)}
+.pt span{font-size:14px;font-variant-numeric:tabular-nums}
+.pt.now{border-color:var(--accent);background:rgba(255,255,255,.03)}
+.pt.now b,.pt.now span{color:var(--accent)}
 .clock{margin-top:8px;font-size:15px;color:var(--accent);font-variant-numeric:tabular-nums;display:flex;gap:8px;justify-content:center;align-items:center}
 .clock-sep{color:var(--muted)}
 #clockLabel{color:var(--muted)}
@@ -87,12 +93,18 @@ input[type=search]::placeholder{color:var(--muted)}
     <div class='hijri-date' id='hDate'>…</div>
     <div class='hijri-greg' id='gDate'></div>
     <div class='clock'><span id='clock'></span><span class='clock-sep'>·</span><span id='clockLabel'></span></div>
+    <div class='ptimes' id='ptimes'></div>
     <div id='badgeBox'></div>
     <div class='adjust'>
       <span>تعديل التاريخ الهجري:</span>
       <button id='minus'>− يوم</button>
       <button id='plus'>+ يوم</button>
       <span id='offText'></span>
+    </div>
+    <div class='adjust'>
+      <span id='locName'></span>
+      <button id='geoBtn'>تحديد موقعي</button>
+      <button id='geoReset'>القدس</button>
     </div>
   </div>
   <div id='todayList'></div>
@@ -155,27 +167,79 @@ function hijriOf(date){
 
 function shifted(){var d=new Date();d.setDate(d.getDate()+state.off);return d}
 
-function accentFor(h,hour){
+function accentFor(h,t,p){
   if(h&&h.m===9)return '#C9A227';
   if(h&&(h.m===10&&h.d<=3||h.m===12&&h.d>=10&&h.d<=13))return '#5EC2A8';
-  if(hour>=4&&hour<7)return '#E8A0A8';
-  if(hour>=7&&hour<12)return '#7FC7C2';
-  if(hour>=12&&hour<16)return '#EBC46A';
-  if(hour>=16&&hour<19)return '#E08D5A';
+  if(t>=p.fajr&&t<p.sunrise)return '#E8A0A8';
+  if(t>=p.sunrise&&t<p.dhuhr)return '#7FC7C2';
+  if(t>=p.dhuhr&&t<p.asr)return '#EBC46A';
+  if(t>=p.asr&&t<p.maghrib)return '#E08D5A';
   return '#8E9BE0';
 }
 
 /* ---- تصنيفات الوقت اليومي ---- */
-function timeCats(hour){
-  if(hour>=4&&hour<7)return ['waking','morning'];
-  if(hour>=7&&hour<16)return ['morning'];
-  if(hour>=16&&hour<21)return ['evening'];
-  return ['sleep'];
+/* ---- مواعيد الصلاة (حساب محلّي بلا إنترنت) ---- */
+var DEG=Math.PI/180, AFTER=30/60;
+var LOC={lat:31.7683,lng:35.2137,name:'القدس'};
+try{var _l=JSON.parse(localStorage.getItem('adiya:loc')||'null');if(_l&&_l.lat)LOC=_l}catch(e){}
+
+function jdOf(y,m,d){if(m<=2){y-=1;m+=12}var A=Math.floor(y/100),B=2-A+Math.floor(A/4);
+  return Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+d+B-1524.5}
+function sunPos(jd){
+  var D=jd-2451545.0,g=(357.529+0.98560028*D)%360,q=(280.459+0.98564736*D)%360,
+      L=(q+1.915*Math.sin(g*DEG)+0.020*Math.sin(2*g*DEG))%360,e=23.439-0.00000036*D,
+      RA=Math.atan2(Math.cos(e*DEG)*Math.sin(L*DEG),Math.cos(L*DEG))/DEG/15,
+      decl=Math.asin(Math.sin(e*DEG)*Math.sin(L*DEG))/DEG;
+  RA=(RA+24)%24;var EqT=q/15-RA;if(EqT>12)EqT-=24;if(EqT<-12)EqT+=24;
+  return {d:decl,eq:EqT};
 }
-function timeLabel(hour){
-  if(hour>=4&&hour<7)return 'أذكار الاستيقاظ والصباح';
-  if(hour>=7&&hour<16)return 'أذكار الصباح';
-  if(hour>=16&&hour<21)return 'أذكار المساء';
+function hourAngle(lat,decl,ang){
+  var c=(-Math.sin(ang*DEG)-Math.sin(lat*DEG)*Math.sin(decl*DEG))/(Math.cos(lat*DEG)*Math.cos(decl*DEG));
+  return (c>1||c<-1)?null:Math.acos(c)/DEG/15;
+}
+function prayerTimes(date){
+  var lat=LOC.lat,lng=LOC.lng,tz=-date.getTimezoneOffset()/60,
+      jd=jdOf(date.getFullYear(),date.getMonth()+1,date.getDate())-lng/(15*24),
+      s=sunPos(jd),dh=12+tz-lng/15-s.eq,
+      sr=hourAngle(lat,s.d,0.833),fj=hourAngle(lat,s.d,18),ish=hourAngle(lat,s.d,17),
+      asrA=-Math.atan(1/(1+Math.tan(Math.abs(lat-s.d)*DEG)))/DEG,
+      ar=hourAngle(lat,s.d,asrA);
+  return {fajr:fj==null?4:dh-fj, sunrise:sr==null?6:dh-sr, dhuhr:dh,
+          asr:ar==null?15:dh+ar, maghrib:sr==null?18:dh+sr, isha:ish==null?20:dh+ish};
+}
+var PNAME={fajr:'الفجر',sunrise:'الشروق',dhuhr:'الظهر',asr:'العصر',maghrib:'المغرب',isha:'العشاء'};
+var PORDER=['fajr','sunrise','dhuhr','asr','maghrib','isha'];
+var ADHAN=['fajr','dhuhr','asr','maghrib','isha'];
+
+function nowHours(){var d=new Date();return d.getHours()+d.getMinutes()/60}
+
+/* الصلاة التي مضى على أذانها أقلّ من نصف ساعة */
+function recentAdhan(p,t){
+  for(var i=0;i<ADHAN.length;i++){
+    var k=ADHAN[i],v=p[k];
+    if(t>=v&&t<v+AFTER)return k;
+  }
+  if(t<p.fajr&&p.isha>p.fajr){ /* بعد منتصف الليل */
+    var d=t+24-p.isha; if(d>=0&&d<AFTER)return 'isha';
+  }
+  return null;
+}
+
+function timeCats(t,p){
+  var out=[],r=recentAdhan(p,t);
+  if(r)out.push('after-prayer');
+  if(t>=p.fajr&&t<p.sunrise){out.push('waking');out.push('morning')}
+  else if(t>=p.sunrise&&t<p.asr)out.push('morning');
+  else if(t>=p.asr&&t<p.isha)out.push('evening');
+  else out.push('sleep');
+  return out;
+}
+function timeLabel(t,p){
+  var r=recentAdhan(p,t);
+  if(r)return 'أذكار ما بعد صلاة '+PNAME[r];
+  if(t>=p.fajr&&t<p.sunrise)return 'أذكار الاستيقاظ والصباح';
+  if(t>=p.sunrise&&t<p.asr)return 'أذكار الصباح';
+  if(t>=p.asr&&t<p.isha)return 'أذكار المساء';
   return 'أذكار النوم';
 }
 
@@ -231,19 +295,21 @@ function clockText(d){
 }
 
 function renderToday(){
-  var g=shifted(),h=hijriOf(g),now=new Date(),hour=now.getHours();
-  document.documentElement.style.setProperty('--accent',accentFor(h,hour));
+  var g=shifted(),h=hijriOf(g),now=new Date(),t=nowHours(),p=prayerTimes(now);
+  document.documentElement.style.setProperty('--accent',accentFor(h,t,p));
   var wd=new Intl.DateTimeFormat('ar',{weekday:'long'}).format(g);
   document.getElementById('hDate').textContent=h?(wd+' ، '+h.d+' '+HMONTH[h.m-1]+' '+h.y+' هـ'):wd;
   document.getElementById('gDate').textContent=new Intl.DateTimeFormat('ar',{day:'numeric',month:'long',year:'numeric'}).format(g);
   document.getElementById('clock').textContent=clockText(now);
-  document.getElementById('clockLabel').textContent=timeLabel(hour);
+  document.getElementById('clockLabel').textContent=timeLabel(t,p);
+  renderPrayers(p,t);
+  document.getElementById('locName').textContent=LOC.name;
   document.getElementById('offText').textContent=state.off?'('+(state.off>0?'+':'')+state.off+')':'';
 
-  var occ=occasionOf(h,g),tc=timeCats(hour);
+  var occ=occasionOf(h,g),tc=timeCats(t,p);
   document.getElementById('badgeBox').innerHTML=
     (occ.label?'<span class="badge">'+esc(occ.label)+'</span>':'')+
-    '<span class="badge">'+esc(timeLabel(hour))+'</span>';
+    '<span class="badge">'+esc(timeLabel(t,p))+'</span>';
 
   var seen={},pool=[];
   function push(list){list.forEach(function(d){if(!seen[d.id]){seen[d.id]=1;pool.push(d)}})}
@@ -259,6 +325,20 @@ function renderToday(){
   state.pool=pool;
   renderBatch();
 }
+
+function fmtT(v){var h=Math.floor(v),m=Math.round((v-h)*60);if(m===60){h++;m=0}h=(h+24)%24;
+  var ap=h<12?'ص':'م',hh=h%12;if(hh===0)hh=12;return hh+':'+pad2(m)+' '+ap}
+
+function renderPrayers(p,t){
+  var cur=null;
+  for(var i=PORDER.length-1;i>=0;i--){if(t>=p[PORDER[i]]){cur=PORDER[i];break}}
+  if(cur===null)cur='isha';
+  document.getElementById('ptimes').innerHTML=PORDER.map(function(k){
+    return '<div class="pt'+(k===cur?' now':'')+'"><b>'+PNAME[k]+'</b><span>'+fmtT(p[k])+'</span></div>';
+  }).join('');
+}
+
+function saveLoc(){try{localStorage.setItem('adiya:loc',JSON.stringify(LOC))}catch(e){}}
 
 function renderBatch(){
   var pool=state.pool,box=document.getElementById('todayList'),
@@ -330,6 +410,19 @@ function tab(which){
   document.getElementById('viewBrowse').hidden=t;
   if(!t)updateArrows();
 }
+document.getElementById('geoBtn').addEventListener('click',function(){
+  var b=this;
+  if(!navigator.geolocation){b.textContent='غير مدعوم';return}
+  b.textContent='جارٍ التحديد…';
+  navigator.geolocation.getCurrentPosition(function(pos){
+    LOC={lat:pos.coords.latitude,lng:pos.coords.longitude,name:'موقعي'};
+    saveLoc();b.textContent='تحديد موقعي';renderToday();
+  },function(){b.textContent='تعذّر التحديد';setTimeout(function(){b.textContent='تحديد موقعي'},2000)},
+  {timeout:8000,maximumAge:864e5});
+});
+document.getElementById('geoReset').addEventListener('click',function(){
+  LOC={lat:31.7683,lng:35.2137,name:'القدس'};saveLoc();renderToday();
+});
 document.getElementById('moreBtn').addEventListener('click',function(){state.bump++;renderBatch();window.scrollTo({top:0,behavior:'smooth'})});
 setInterval(function(){if(!document.getElementById('viewToday').hidden)renderToday()},60000);
 document.getElementById('tabToday').addEventListener('click',function(){tab('today')});

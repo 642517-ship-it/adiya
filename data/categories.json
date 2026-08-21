@@ -20,6 +20,11 @@
     "kind": "time"
   },
   {
+    "id": "tahajjud",
+    "name": "قيام الليل والتهجّد",
+    "kind": "time"
+  },
+  {
     "id": "ramadan",
     "name": "رمضان",
     "kind": "occasion"

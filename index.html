@@ -68,6 +68,10 @@ input[type=search]::placeholder{color:var(--muted)}
 #moreBtn{padding:11px 26px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--text);font:inherit;font-size:15px;cursor:pointer;transition:.15s}
 #moreBtn:hover{border-color:var(--accent);color:var(--accent)}
 #batchInfo{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mood{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.mood label{font-size:14px;color:var(--muted)}
+#mood{padding:8px 14px;background:var(--panel);border:1px solid var(--line);border-radius:999px;color:var(--text);font:inherit;font-size:14px;cursor:pointer;max-width:220px}
+#mood:focus{outline:none;border-color:var(--accent)}
 .sec{font-size:15px;font-weight:600;color:var(--accent);margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
 .sec:first-child{margin-top:4px}
 .counter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
@@ -116,6 +120,10 @@ input[type=search]::placeholder{color:var(--muted)}
       <button id='geoBtn'>تحديد موقعي</button>
       <button id='geoReset'>القدس</button>
       <button id='installBtn' hidden>تثبيت التطبيق</button>
+    </div>
+    <div class='mood'>
+      <label for='mood'>كيف تشعر الآن؟</label>
+      <select id='mood'></select>
     </div>
   </div>
   <div id='todayList'></div>
@@ -243,6 +251,24 @@ function recentAdhan(p,t){
 }
 
 var GENERAL=['general','rizq','health','distress','marriage','travel'];
+var MOODS=[
+  {id:'',name:'حسب الوقت',cats:null},
+  {id:'happy',name:'سعيد وشاكر',cats:['general']},
+  {id:'sad',name:'حزين',cats:['distress']},
+  {id:'anxious',name:'قلق أو خائف',cats:['distress','tahajjud']},
+  {id:'sick',name:'مريض أو موجوع',cats:['health','ruqya']},
+  {id:'travel',name:'مسافر',cats:['travel']},
+  {id:'food',name:'مقبل على الطعام',cats:['food','rizq']},
+  {id:'rizq',name:'أطلب الرزق أو عليّ دَين',cats:['rizq']},
+  {id:'marriage',name:'أمر الزواج والذرّية',cats:['marriage']},
+  {id:'home',name:'خارج من البيت',cats:['home','travel']},
+  {id:'mosque',name:'ذاهب إلى المسجد',cats:['mosque','prayer','after-prayer']},
+  {id:'istighfar',name:'أستغفر ربّي',cats:['general','tahajjud']},
+  {id:'night',name:'أريد قيام الليل',cats:['tahajjud']},
+  {id:'deceased',name:'أدعو لميّت',cats:['deceased']},
+  {id:'quran',name:'ختمت القرآن',cats:['khatm-quran']}
+];
+state.mood='';
 
 /* هل نحن في الثلث الأخير من الليل؟ (يمتدّ عبر منتصف الليل) */
 function inLastThird(t,p){
@@ -361,12 +387,14 @@ function renderToday(){
     });
     return out;
   }
-  var chain=[tc,baseCats(t,p),GENERAL,null],ci=0;
+  var mood=null;
+  for(var mi=0;mi<MOODS.length;mi++){if(MOODS[mi].id&&MOODS[mi].id===state.mood)mood=MOODS[mi]}
+  var chain=mood?[mood.cats,GENERAL,null]:[tc,baseCats(t,p),GENERAL,null],ci=0;
   while(!pool.length&&ci<chain.length){pool=take(chain[ci]);ci++}
   state.occRows=occRows;
   state.occLabel=occ.label;
   state.pool=pool;
-  state.poolLabel=timeLabel(t,p);
+  state.poolLabel=mood?('أدعية: '+mood.name):timeLabel(t,p);
   renderBatch();
 }
 
@@ -386,29 +414,42 @@ function renderPrayers(p,t){
 
 function saveLoc(){try{localStorage.setItem('adiya:loc',JSON.stringify(LOC))}catch(e){}}
 
+function slice(list,n,slot){
+  if(!list.length)return {rows:[],page:0,pages:0};
+  var pages=Math.ceil(list.length/n),
+      page=((slot%pages)+pages)%pages;
+  return {rows:list.slice(page*n,page*n+n),page:page,pages:pages};
+}
+
 function renderBatch(){
-  var pool=state.pool,box=document.getElementById('todayList'),
-      info=document.getElementById('batchInfo'),btn=document.getElementById('moreBtn'),html='';
+  var pool=state.pool,occ=state.occRows||[],
+      box=document.getElementById('todayList'),
+      info=document.getElementById('batchInfo'),
+      btn=document.getElementById('moreBtn'),
+      slot=Math.floor(Date.now()/SLOT)+state.bump,html='';
 
-  if(state.occRows&&state.occRows.length){
-    html+='<h2 class="sec">'+esc(state.occLabel||'المناسبة')+'</h2>'+
-          state.occRows.map(card).join('');
-  }
+  /* المجموع خمسة دائمًا: اثنان للمناسبة وثلاثة للوقت، أو خمسة للوقت وحده */
+  var nOcc=occ.length?Math.min(2,occ.length):0,
+      nPool=PAGE-nOcc;
 
-  if(!pool.length){
-    box.innerHTML=html||'<div class="empty">لا توجد أدعية مسجّلة لهذا الوقت بعد.</div>';
+  var o=slice(occ,nOcc,slot),q=slice(pool,nPool,slot);
+
+  if(o.rows.length)
+    html+='<h2 class="sec">'+esc(state.occLabel||'المناسبة')+'</h2>'+o.rows.map(card).join('');
+  if(q.rows.length)
+    html+='<h2 class="sec">'+esc(state.poolLabel)+'</h2>'+q.rows.map(card).join('');
+
+  if(!html){
+    box.innerHTML='<div class="empty">لا توجد أدعية مسجّلة لهذا الوقت بعد.</div>';
     info.textContent='';btn.hidden=true;return;
   }
-
-  var slot=Math.floor(Date.now()/SLOT),
-      pages=Math.ceil(pool.length/PAGE),
-      page=((slot+state.bump)%pages+pages)%pages,
-      rows=pool.slice(page*PAGE,page*PAGE+PAGE);
-
-  html+='<h2 class="sec">'+esc(state.poolLabel)+'</h2>'+rows.map(card).join('');
   box.innerHTML=html;
-  info.textContent='مجموعة '+(page+1)+' من '+pages+' · '+pool.length+' دعاء في '+state.poolLabel;
-  btn.hidden=pages<2;
+
+  var parts=[];
+  if(o.pages>1)parts.push(state.occLabel+': '+(o.page+1)+'/'+o.pages);
+  if(q.pages)parts.push(state.poolLabel+': '+(q.page+1)+'/'+q.pages+' · '+pool.length+' دعاء');
+  info.textContent=parts.join(' — ');
+  btn.hidden=!(o.pages>1||q.pages>1);
 }
 
 function renderAll(){renderToday();markChips();renderList()}
@@ -421,6 +462,14 @@ function tab(which){
   document.getElementById('viewBrowse').hidden=t;
   if(!t)updateArrows();
 }
+var moodSel=document.getElementById('mood');
+MOODS.forEach(function(m){
+  var o=document.createElement('option');o.value=m.id;o.textContent=m.name;moodSel.appendChild(o);
+});
+moodSel.addEventListener('change',function(){
+  state.mood=this.value;state.bump=0;renderToday();
+  window.scrollTo({top:0,behavior:'smooth'});
+});
 document.getElementById('geoBtn').addEventListener('click',function(){
   var b=this;
   if(!navigator.geolocation){b.textContent='غير مدعوم';return}

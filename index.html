@@ -184,7 +184,8 @@ function accentFor(h,t,p){
   if(t>=p.fajr&&t<p.sunrise)return '#E8A0A8';
   if(t>=p.sunrise&&t<p.dhuhr)return '#7FC7C2';
   if(t>=p.dhuhr&&t<p.asr)return '#EBC46A';
-  if(t>=p.asr&&t<p.maghrib)return '#E08D5A';
+  if(t>=p.asr&&t<p.isha)return '#E08D5A';
+  if(inLastThird(t,p))return '#A99BE8';
   return '#8E9BE0';
 }
 
@@ -215,8 +216,13 @@ function prayerTimes(date){
       sr=hourAngle(lat,s.d,0.833),fj=hourAngle(lat,s.d,18),ish=hourAngle(lat,s.d,17),
       asrA=-Math.atan(1/(1+Math.tan(Math.abs(lat-s.d)*DEG)))/DEG,
       ar=hourAngle(lat,s.d,asrA);
-  return {fajr:fj==null?4:dh-fj, sunrise:sr==null?6:dh-sr, dhuhr:dh,
-          asr:ar==null?15:dh+ar, maghrib:sr==null?18:dh+sr, isha:ish==null?20:dh+ish};
+  var P={fajr:fj==null?4:dh-fj, sunrise:sr==null?6:dh-sr, dhuhr:dh,
+         asr:ar==null?15:dh+ar, maghrib:sr==null?18:dh+sr, isha:ish==null?20:dh+ish};
+  /* الثلث الأخير من الليل: من المغرب إلى الفجر */
+  var night=(P.fajr+24)-P.maghrib;
+  P.lastThird=P.maghrib+night*2/3;
+  if(P.lastThird>=24)P.lastThird-=24;
+  return P;
 }
 var PNAME={fajr:'الفجر',sunrise:'الشروق',dhuhr:'الظهر',asr:'العصر',maghrib:'المغرب',isha:'العشاء'};
 var PORDER=['fajr','sunrise','dhuhr','asr','maghrib','isha'];
@@ -236,13 +242,21 @@ function recentAdhan(p,t){
   return null;
 }
 
+var GENERAL=['general','rizq','health','distress','marriage','travel'];
+
+/* هل نحن في الثلث الأخير من الليل؟ (يمتدّ عبر منتصف الليل) */
+function inLastThird(t,p){
+  var a=p.lastThird,b=p.fajr;
+  return (a<b) ? (t>=a&&t<b) : (t>=a||t<b);
+}
+
 function timeCats(t,p){
-  var r=recentAdhan(p,t);
-  if(r)return ['after-prayer'];                       /* نصف ساعة بعد كل أذان */
+  if(recentAdhan(p,t))return ['after-prayer'];
   if(t>=p.fajr&&t<p.sunrise)return ['waking','morning'];
-  if(t>=p.sunrise&&t<p.dhuhr)return ['morning'];      /* الصباح حتى أذان الظهر */
-  if(t>=p.dhuhr&&t<p.asr)return ['general'];          /* بين الظهر والعصر */
+  if(t>=p.sunrise&&t<p.dhuhr)return ['morning'];
+  if(t>=p.dhuhr&&t<p.asr)return GENERAL;
   if(t>=p.asr&&t<p.isha)return ['evening'];
+  if(inLastThird(t,p))return ['tahajjud'];
   return ['sleep'];
 }
 function timeLabel(t,p){
@@ -250,8 +264,9 @@ function timeLabel(t,p){
   if(r)return 'أذكار ما بعد صلاة '+PNAME[r];
   if(t>=p.fajr&&t<p.sunrise)return 'أذكار الاستيقاظ والصباح';
   if(t>=p.sunrise&&t<p.dhuhr)return 'أذكار الصباح';
-  if(t>=p.dhuhr&&t<p.asr)return 'أدعية عامّة';
+  if(t>=p.dhuhr&&t<p.asr)return 'أدعية الحاجات';
   if(t>=p.asr&&t<p.isha)return 'أذكار المساء';
+  if(inLastThird(t,p))return 'قيام الليل والتهجّد';
   return 'أذكار النوم';
 }
 
@@ -353,9 +368,11 @@ function renderPrayers(p,t){
   var cur=null;
   for(var i=PORDER.length-1;i>=0;i--){if(t>=p[PORDER[i]]){cur=PORDER[i];break}}
   if(cur===null)cur='isha';
-  document.getElementById('ptimes').innerHTML=PORDER.map(function(k){
+  var html=PORDER.map(function(k){
     return '<div class="pt'+(k===cur?' now':'')+'"><b>'+PNAME[k]+'</b><span>'+fmtT(p[k])+'</span></div>';
   }).join('');
+  html+='<div class="pt'+(inLastThird(t,p)?' now':'')+'"><b>الثلث الأخير</b><span>'+fmtT(p.lastThird)+'</span></div>';
+  document.getElementById('ptimes').innerHTML=html;
 }
 
 function saveLoc(){try{localStorage.setItem('adiya:loc',JSON.stringify(LOC))}catch(e){}}

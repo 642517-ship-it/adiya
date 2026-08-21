@@ -1,5 +1,5 @@
 /* الأدعية — service worker */
-var VERSION='adiya-v2';
+var VERSION='adiya-v3';
 var SHELL=['./','./index.html','./manifest.json','./icons/icon-192.png','./icons/icon-512.png'];
 var DATA=['./data/duas.json','./data/categories.json'];
 self.addEventListener('install',function(e){

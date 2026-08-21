@@ -250,6 +250,14 @@ function inLastThird(t,p){
   return (a<b) ? (t>=a&&t<b) : (t>=a||t<b);
 }
 
+function baseCats(t,p){
+  if(t>=p.fajr&&t<p.sunrise)return ['waking','morning'];
+  if(t>=p.sunrise&&t<p.dhuhr)return ['morning'];
+  if(t>=p.dhuhr&&t<p.asr)return GENERAL;
+  if(t>=p.asr&&t<p.isha)return ['evening'];
+  if(inLastThird(t,p))return ['tahajjud'];
+  return ['sleep'];
+}
 function timeCats(t,p){
   if(recentAdhan(p,t))return ['after-prayer'];
   if(t>=p.fajr&&t<p.sunrise)return ['waking','morning'];
@@ -345,15 +353,16 @@ function renderToday(){
     });
     occRows.forEach(function(d){seen[d.id]=1});
   }
-  state.duas.forEach(function(d){
-    if(seen[d.id])return;
-    if(d.categories.some(function(c){return tc.indexOf(c)>=0})){seen[d.id]=1;pool.push(d)}
-  });
-  if(!pool.length){
+  function take(cats){
+    var out=[];
     state.duas.forEach(function(d){
-      if(!seen[d.id]&&d.categories.indexOf('general')>=0){seen[d.id]=1;pool.push(d)}
+      if(seen[d.id])return;
+      if(!cats||d.categories.some(function(c){return cats.indexOf(c)>=0})){seen[d.id]=1;out.push(d)}
     });
+    return out;
   }
+  var chain=[tc,baseCats(t,p),GENERAL,null],ci=0;
+  while(!pool.length&&ci<chain.length){pool=take(chain[ci]);ci++}
   state.occRows=occRows;
   state.occLabel=occ.label;
   state.pool=pool;
@@ -483,12 +492,12 @@ Promise.all([
   buildChips();
   renderAll();
 }).catch(function(){
-  document.getElementById('todayList').innerHTML='<div class="empty">تعذّر تحميل الأدعية.</div>';
+  document.getElementById('todayList').innerHTML='<div class="empty">تعذّر تحميل ملفّ الأدعية. تحقّق من الاتصال ثم أعد فتح التطبيق.</div>';
 });
 /* ---- PWA ---- */
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
-    navigator.serviceWorker.register('sw.js').catch(function(){});
+    navigator.serviceWorker.register('sw.js').then(function(r){r.update()}).catch(function(){});
   });
 }
 var deferredPrompt=null,installBtn=document.getElementById('installBtn');

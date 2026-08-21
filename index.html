@@ -68,6 +68,8 @@ input[type=search]::placeholder{color:var(--muted)}
 #moreBtn{padding:11px 26px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--text);font:inherit;font-size:15px;cursor:pointer;transition:.15s}
 #moreBtn:hover{border-color:var(--accent);color:var(--accent)}
 #batchInfo{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sec{font-size:15px;font-weight:600;color:var(--accent);margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.sec:first-child{margin-top:4px}
 .counter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
 .cbtn{padding:10px 22px;background:var(--accent);border:1px solid var(--accent);border-radius:999px;color:#0E1626;font:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:.15s}
 .cbtn:active{transform:scale(.96)}
@@ -137,7 +139,7 @@ input[type=search]::placeholder{color:var(--muted)}
 <script>
 var CAT={},state={duas:[],cats:[],active:'all',q:'',favs:new Set(),off:0,counts:{}};
 var CAP=7,PAGE=5,SLOT=30*60*1000;
-state.bump=0;state.pool=[];state.poolLabel='';
+state.bump=0;state.pool=[];state.poolLabel='';state.occRows=[];state.occLabel='';
 try{state.favs=new Set(JSON.parse(localStorage.getItem('adiya:favs')||'[]'))}catch(e){}
 try{state.off=Number(localStorage.getItem('adiya:hijriOffset')||0)||0}catch(e){}
 try{state.counts=JSON.parse(localStorage.getItem('adiya:counts')||'{}')||{}}catch(e){}
@@ -235,19 +237,20 @@ function recentAdhan(p,t){
 }
 
 function timeCats(t,p){
-  var out=[],r=recentAdhan(p,t);
-  if(r)out.push('after-prayer');
-  if(t>=p.fajr&&t<p.sunrise){out.push('waking');out.push('morning')}
-  else if(t>=p.sunrise&&t<p.asr)out.push('morning');
-  else if(t>=p.asr&&t<p.isha)out.push('evening');
-  else out.push('sleep');
-  return out;
+  var r=recentAdhan(p,t);
+  if(r)return ['after-prayer'];                       /* نصف ساعة بعد كل أذان */
+  if(t>=p.fajr&&t<p.sunrise)return ['waking','morning'];
+  if(t>=p.sunrise&&t<p.dhuhr)return ['morning'];      /* الصباح حتى أذان الظهر */
+  if(t>=p.dhuhr&&t<p.asr)return ['general'];          /* بين الظهر والعصر */
+  if(t>=p.asr&&t<p.isha)return ['evening'];
+  return ['sleep'];
 }
 function timeLabel(t,p){
   var r=recentAdhan(p,t);
   if(r)return 'أذكار ما بعد صلاة '+PNAME[r];
   if(t>=p.fajr&&t<p.sunrise)return 'أذكار الاستيقاظ والصباح';
-  if(t>=p.sunrise&&t<p.asr)return 'أذكار الصباح';
+  if(t>=p.sunrise&&t<p.dhuhr)return 'أذكار الصباح';
+  if(t>=p.dhuhr&&t<p.asr)return 'أدعية عامّة';
   if(t>=p.asr&&t<p.isha)return 'أذكار المساء';
   return 'أذكار النوم';
 }
@@ -320,20 +323,24 @@ function renderToday(){
     (occ.label?'<span class="badge">'+esc(occ.label)+'</span>':'')+
     '<span class="badge">'+esc(timeLabel(t,p))+'</span>';
 
-  var seen={},pool=[];
-  function push(list){list.forEach(function(d){if(!seen[d.id]){seen[d.id]=1;pool.push(d)}})}
+  var seen={},pool=[],occRows=[];
   if(occ.cats.length){
-    push(state.duas.filter(function(d){
+    occRows=state.duas.filter(function(d){
       return d.categories.some(function(c){return occ.cats.indexOf(c)>=0});
-    }));
+    });
+    occRows.forEach(function(d){seen[d.id]=1});
   }
-  push(state.duas.filter(function(d){
-    return d.categories.some(function(c){return tc.indexOf(c)>=0});
-  }));
-  /* الأدعية العامّة لا تُقحَم على أذكار الوقت — تُستعمل فقط إن لم يكن للوقت أذكار */
+  state.duas.forEach(function(d){
+    if(seen[d.id])return;
+    if(d.categories.some(function(c){return tc.indexOf(c)>=0})){seen[d.id]=1;pool.push(d)}
+  });
   if(!pool.length){
-    push(state.duas.filter(function(d){return d.categories.indexOf('general')>=0}));
+    state.duas.forEach(function(d){
+      if(!seen[d.id]&&d.categories.indexOf('general')>=0){seen[d.id]=1;pool.push(d)}
+    });
   }
+  state.occRows=occRows;
+  state.occLabel=occ.label;
   state.pool=pool;
   state.poolLabel=timeLabel(t,p);
   renderBatch();
@@ -355,62 +362,27 @@ function saveLoc(){try{localStorage.setItem('adiya:loc',JSON.stringify(LOC))}cat
 
 function renderBatch(){
   var pool=state.pool,box=document.getElementById('todayList'),
-      info=document.getElementById('batchInfo'),btn=document.getElementById('moreBtn');
+      info=document.getElementById('batchInfo'),btn=document.getElementById('moreBtn'),html='';
+
+  if(state.occRows&&state.occRows.length){
+    html+='<h2 class="sec">'+esc(state.occLabel||'المناسبة')+'</h2>'+
+          state.occRows.map(card).join('');
+  }
+
   if(!pool.length){
-    box.innerHTML='<div class="empty">لا توجد أدعية مسجّلة لهذا الوقت بعد.</div>';
+    box.innerHTML=html||'<div class="empty">لا توجد أدعية مسجّلة لهذا الوقت بعد.</div>';
     info.textContent='';btn.hidden=true;return;
   }
+
   var slot=Math.floor(Date.now()/SLOT),
       pages=Math.ceil(pool.length/PAGE),
       page=((slot+state.bump)%pages+pages)%pages,
-      start=page*PAGE,
-      rows=pool.slice(start,start+PAGE);
-  box.innerHTML=rows.map(card).join('');
+      rows=pool.slice(page*PAGE,page*PAGE+PAGE);
+
+  html+='<h2 class="sec">'+esc(state.poolLabel)+'</h2>'+rows.map(card).join('');
+  box.innerHTML=html;
   info.textContent='مجموعة '+(page+1)+' من '+pages+' · '+pool.length+' دعاء في '+state.poolLabel;
   btn.hidden=pages<2;
-}
-
-/* ---- شريط المجموعات ---- */
-var chipsBox=document.getElementById('chips'),
-    chipPrev=document.getElementById('chipPrev'),
-    chipNext=document.getElementById('chipNext');
-
-function updateArrows(){
-  var over=chipsBox.scrollWidth>chipsBox.clientWidth+4;
-  chipPrev.hidden=!over;chipNext.hidden=!over;
-}
-chipPrev.addEventListener('click',function(){chipsBox.scrollBy({left:220,behavior:'smooth'})});
-chipNext.addEventListener('click',function(){chipsBox.scrollBy({left:-220,behavior:'smooth'})});
-window.addEventListener('resize',updateArrows);
-
-function buildChips(){
-  var items=[{id:'all',name:'الكل'},{id:'fav',name:'المفضّلة'}].concat(state.cats);
-  chipsBox.innerHTML='';
-  items.forEach(function(c){
-    var b=document.createElement('button');
-    b.className='chip';b.textContent=c.name;b.dataset.cat=c.id;
-    b.setAttribute('aria-pressed',state.active===c.id);
-    b.addEventListener('click',function(){state.active=c.id;markChips();renderList()});
-    chipsBox.appendChild(b);
-  });
-  updateArrows();
-}
-function markChips(){
-  [].forEach.call(chipsBox.children,function(b){
-    b.setAttribute('aria-pressed',b.dataset.cat===state.active);
-  });
-}
-
-function renderList(){
-  var q=state.q;
-  var rows=state.duas.filter(function(d){
-    if(q&&d._s.indexOf(q)<0)return false;
-    if(state.active==='all')return true;
-    if(state.active==='fav')return state.favs.has(d.id);
-    return d.categories.indexOf(state.active)>=0;
-  });
-  document.getElementById('browseList').innerHTML=rows.length?rows.map(card).join(''):'<div class="empty">لا يوجد دعاء مطابق.</div>';
-  document.getElementById('count').textContent=rows.length+' من '+state.duas.length+' دعاء';
 }
 
 function renderAll(){renderToday();markChips();renderList()}

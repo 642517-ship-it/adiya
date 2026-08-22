@@ -199,7 +199,7 @@ function accentFor(h,t,p){
 
 /* ---- تصنيفات الوقت اليومي ---- */
 /* ---- مواعيد الصلاة (حساب محلّي بلا إنترنت) ---- */
-var DEG=Math.PI/180, AFTER=30/60;
+var DEG=Math.PI/180, AFTER=30/60, ADHAN_WIN=5/60;
 var LOC={lat:31.7683,lng:35.2137,name:'القدس'};
 try{var _l=JSON.parse(localStorage.getItem('adiya:loc')||'null');if(_l&&_l.lat)LOC=_l}catch(e){}
 
@@ -263,6 +263,8 @@ var MOODS=[
   {id:'marriage',name:'أمر الزواج والذرّية',cats:['marriage']},
   {id:'home',name:'خارج من البيت',cats:['home','travel']},
   {id:'mosque',name:'ذاهب إلى المسجد',cats:['mosque','prayer','after-prayer']},
+  {id:'adhan',name:'أسمع الأذان',cats:['adhan']},
+  {id:'khala',name:'داخل إلى الخلاء',cats:['khala']},
   {id:'istighfar',name:'أستغفر ربّي',cats:['general','tahajjud']},
   {id:'night',name:'أريد قيام الليل',cats:['tahajjud']},
   {id:'deceased',name:'أدعو لميّت',cats:['deceased']},
@@ -285,7 +287,12 @@ function baseCats(t,p){
   return ['sleep'];
 }
 function timeCats(t,p){
-  if(recentAdhan(p,t))return ['after-prayer'];
+  var r0=recentAdhan(p,t);
+  if(r0){
+    var v=p[r0];
+    if(t>=v&&t<v+ADHAN_WIN)return ['adhan'];   /* خمس دقائق من الأذان */
+    return ['after-prayer'];
+  }
   if(t>=p.fajr&&t<p.sunrise)return ['waking','morning'];
   if(t>=p.sunrise&&t<p.dhuhr)return ['morning'];
   if(t>=p.dhuhr&&t<p.asr)return GENERAL;
@@ -295,7 +302,11 @@ function timeCats(t,p){
 }
 function timeLabel(t,p){
   var r=recentAdhan(p,t);
-  if(r)return 'أذكار ما بعد صلاة '+PNAME[r];
+  if(r){
+    var v=p[r];
+    if(t>=v&&t<v+ADHAN_WIN)return 'أذكار أذان '+PNAME[r];
+    return 'أذكار ما بعد صلاة '+PNAME[r];
+  }
   if(t>=p.fajr&&t<p.sunrise)return 'أذكار الاستيقاظ والصباح';
   if(t>=p.sunrise&&t<p.dhuhr)return 'أذكار الصباح';
   if(t>=p.dhuhr&&t<p.asr)return 'أدعية الحاجات';

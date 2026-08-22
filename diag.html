@@ -32,6 +32,7 @@
 
 <button id='ask'>اطلب الإذن الآن</button>
 <button id='sub'>جرّب الاشتراك الكامل</button>
+<button id='ping'>أرسل إشعارًا تجريبيًّا الآن</button>
 
 <div id='log'>—</div>
 
@@ -129,6 +130,22 @@ document.getElementById('sub').addEventListener('click',function(){
   }).catch(function(e){
     log('FAIL: '+e.name+' - '+e.message);
   });
+});
+
+document.getElementById('ping').addEventListener('click',function(){
+  log('جلب الاشتراك المحفوظ...');
+  navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
+  .then(function(s){
+    if(!s){ log('لا يوجد اشتراك - اضغط زرّ الاشتراك أولاً'); return }
+    log('إرسال إلى الخادم...');
+    return fetch(PUSH_URL+'/test',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({endpoint:s.endpoint})}).then(function(r){return r.json()});
+  }).then(function(j){
+    if(!j)return;
+    log('ردّ الخادم: '+JSON.stringify(j));
+    if(j.result==='ok') log('تمّ الإرسال - انتظر ثوانيَ وراقب شريط الإشعارات');
+    else log('لم يُرسَل: '+j.result);
+  }).catch(function(e){ log('FAIL: '+e.name+' - '+e.message) });
 });
 </script>
 </body>

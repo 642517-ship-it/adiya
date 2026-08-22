@@ -356,6 +356,7 @@ function clockText(d){
 }
 
 function renderToday(){
+  if(!state.duas.length)return;
   var g=shifted(),h=hijriOf(g),now=new Date(),t=nowHours(),p=prayerTimes(now);
   document.documentElement.style.setProperty('--accent',accentFor(h,t,p));
   var wd=new Intl.DateTimeFormat('ar',{weekday:'long'}).format(g);
@@ -452,6 +453,49 @@ function renderBatch(){
   btn.hidden=!(o.pages>1||q.pages>1);
 }
 
+/* ---- شريط المجموعات ---- */
+var chipsBox=document.getElementById('chips'),
+    chipPrev=document.getElementById('chipPrev'),
+    chipNext=document.getElementById('chipNext');
+
+function updateArrows(){
+  var over=chipsBox.scrollWidth>chipsBox.clientWidth+4;
+  chipPrev.hidden=!over;chipNext.hidden=!over;
+}
+chipPrev.addEventListener('click',function(){chipsBox.scrollBy({left:220,behavior:'smooth'})});
+chipNext.addEventListener('click',function(){chipsBox.scrollBy({left:-220,behavior:'smooth'})});
+window.addEventListener('resize',updateArrows);
+
+function buildChips(){
+  var items=[{id:'all',name:'الكل'},{id:'fav',name:'المفضّلة'}].concat(state.cats);
+  chipsBox.innerHTML='';
+  items.forEach(function(c){
+    var b=document.createElement('button');
+    b.className='chip';b.textContent=c.name;b.dataset.cat=c.id;
+    b.setAttribute('aria-pressed',state.active===c.id);
+    b.addEventListener('click',function(){state.active=c.id;markChips();renderList()});
+    chipsBox.appendChild(b);
+  });
+  updateArrows();
+}
+function markChips(){
+  [].forEach.call(chipsBox.children,function(b){
+    b.setAttribute('aria-pressed',b.dataset.cat===state.active);
+  });
+}
+
+function renderList(){
+  var q=state.q;
+  var rows=state.duas.filter(function(d){
+    if(q&&d._s.indexOf(q)<0)return false;
+    if(state.active==='all')return true;
+    if(state.active==='fav')return state.favs.has(d.id);
+    return d.categories.indexOf(state.active)>=0;
+  });
+  document.getElementById('browseList').innerHTML=rows.length?rows.map(card).join(''):'<div class="empty">لا يوجد دعاء مطابق.</div>';
+  document.getElementById('count').textContent=rows.length+' من '+state.duas.length+' دعاء';
+}
+
 function renderAll(){renderToday();markChips();renderList()}
 
 function tab(which){
@@ -528,21 +572,45 @@ document.getElementById('q').addEventListener('input',function(e){
   state.q=bare(e.target.value.trim());renderList();
 });
 
-Promise.all([
-  fetch('data/categories.json').then(function(r){return r.json()}),
-  fetch('data/duas.json').then(function(r){return r.json()})
-]).then(function(res){
-  state.cats=res[0];state.duas=res[1];
-  state.cats.forEach(function(c){CAT[c.id]=c.name});
-  state.duas.forEach(function(d){
-    d._s=bare([d.text,d.note||'',d.source||'',
-      d.categories.map(function(c){return CAT[c]||c}).join(' ')].join(' '));
+document.getElementById('todayList').innerHTML='<div class="empty">جارٍ تحميل الأدعية…</div>';
+
+function loadJSON(url,tries){
+  tries=tries||0;
+  var ctl=(typeof AbortController!=='undefined')?new AbortController():null,
+      timer=setTimeout(function(){if(ctl)ctl.abort()},6000);
+  return fetch(url,ctl?{signal:ctl.signal}:undefined).then(function(r){
+    clearTimeout(timer);
+    if(!r.ok)throw new Error('http '+r.status);
+    return r.json();
+  }).catch(function(err){
+    clearTimeout(timer);
+    if(tries<2)return new Promise(function(res){setTimeout(res,800)}).then(function(){return loadJSON(url,tries+1)});
+    throw err;
   });
-  buildChips();
-  renderAll();
-}).catch(function(){
-  document.getElementById('todayList').innerHTML='<div class="empty">تعذّر تحميل ملفّ الأدعية. تحقّق من الاتصال ثم أعد فتح التطبيق.</div>';
-});
+}
+
+function boot(){
+  return Promise.all([loadJSON('data/categories.json'),loadJSON('data/duas.json')]).then(function(res){
+    if(!res[1]||!res[1].length)throw new Error('empty duas');
+    state.cats=res[0];state.duas=res[1];
+    state.cats.forEach(function(c){CAT[c.id]=c.name});
+    state.duas.forEach(function(d){
+      d._s=bare([d.text,d.note||'',d.source||'',
+        d.categories.map(function(c){return CAT[c]||c}).join(' ')].join(' '));
+    });
+    buildChips();
+    renderAll();
+  }).catch(function(){
+    document.getElementById('todayList').innerHTML=
+      '<div class="empty">تعذّر تحميل ملفّ الأدعية.<br><button id="retryBtn" class="creset" style="margin-top:12px">إعادة المحاولة</button></div>';
+    var rb=document.getElementById('retryBtn');
+    if(rb)rb.addEventListener('click',function(){
+      document.getElementById('todayList').innerHTML='<div class="empty">جارٍ التحميل…</div>';boot();
+    });
+  });
+}
+boot();
+
 /* ---- PWA ---- */
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){

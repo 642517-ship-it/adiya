@@ -1,0 +1,14 @@
+name = "adiya-push"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[[kv_namespaces]]
+binding = "SUBS"
+id = "PUT_YOUR_KV_NAMESPACE_ID_HERE"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+VAPID_SUBJECT = "mailto:everest800@gmail.com"
+VAPID_PUBLIC_KEY = "PUT_YOUR_VAPID_PUBLIC_KEY_HERE"

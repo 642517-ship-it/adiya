@@ -1,5 +1,5 @@
 /* الأدعية — service worker */
-var VERSION='adiya-v9';
+var VERSION='adiya-v10';
 var SHELL=['./','./index.html','./manifest.json','./icons/icon-192.png','./icons/icon-512.png'];
 var DATA=['./data/duas.json','./data/categories.json'];
 var NET_TIMEOUT=2500;

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang='ar' dir='rtl'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>تشخيص الإشعارات — الأدعية</title>
+<style>
+  :root{--bg:#0E1626;--panel:#162034;--line:#26324d;--text:#E8EDF7;--muted:#8B9AB5;--ok:#5EC2A8;--bad:#E8737D;--warn:#EBC46A}
+  *{box-sizing:border-box}
+  body{margin:0;padding:16px;background:var(--bg);color:var(--text);
+       font-family:system-ui,'Segoe UI',Tahoma,sans-serif;font-size:15px;line-height:1.6}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;
+       background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:7px}
+  .k{color:var(--muted);font-size:13px;flex:none}
+  .v{font-weight:600;text-align:left;word-break:break-all;font-size:13px}
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+  button{width:100%;padding:14px;margin:14px 0 6px;background:var(--panel);
+         border:1px solid var(--line);border-radius:10px;color:var(--text);
+         font:inherit;font-size:16px;font-weight:600;cursor:pointer}
+  #log{background:#0a1020;border:1px solid var(--line);border-radius:10px;
+       padding:10px;margin-top:10px;font-size:12px;white-space:pre-wrap;
+       word-break:break-all;min-height:60px;font-family:ui-monospace,monospace;direction:ltr;text-align:left}
+</style>
+</head>
+<body>
+<h1>تشخيص الإشعارات</h1>
+<div class='sub'>صوّر هذه الصفحة كاملة وأرسلها</div>
+
+<div id='out'></div>
+
+<button id='ask'>اطلب الإذن الآن</button>
+<button id='sub'>جرّب الاشتراك الكامل</button>
+
+<div id='log'>—</div>
+
+<script>
+var PUSH_URL='https://adiya-push.ai2959105.workers.dev';
+var out=document.getElementById('out'), logBox=document.getElementById('log');
+
+function row(k,v,cls){
+  out.insertAdjacentHTML('beforeend',
+    "<div class='row'><span class='k'>"+k+"</span><span class='v "+(cls||'')+"'>"+v+"</span></div>");
+}
+function log(s){ logBox.textContent = (new Date()).toTimeString().slice(0,8)+'  '+s+'\n'+logBox.textContent }
+
+row('العنوان', location.host);
+row('HTTPS', location.protocol==='https:'?'نعم':'لا', location.protocol==='https:'?'ok':'bad');
+row('وضع العرض', (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)?'مثبّت (standalone)':'متصفّح');
+
+var hasSW='serviceWorker' in navigator, hasPush='PushManager' in window, hasNotif='Notification' in window;
+row('serviceWorker', hasSW?'مدعوم':'غير مدعوم', hasSW?'ok':'bad');
+row('PushManager', hasPush?'مدعوم':'غير مدعوم', hasPush?'ok':'bad');
+row('Notification', hasNotif?'مدعوم':'غير مدعوم', hasNotif?'ok':'bad');
+
+if(hasNotif){
+  var p=Notification.permission;
+  row('حالة الإذن', p, p==='granted'?'ok':(p==='denied'?'bad':'warn'));
+}
+
+row('المتصفّح', (navigator.userAgent.match(/Chrome\/[\d.]+/)||['غير معروف'])[0]);
+row('أندرويد', /Android/.test(navigator.userAgent)?'نعم':'لا');
+
+fetch('index.html?bust='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){
+  var m=t.match(/adiya-v(\d+)/);
+  row('نسخة الخادم', m?('v'+m[1]):'غير معروفة');
+}).catch(function(){row('نسخة الخادم','تعذّر الجلب','bad')});
+
+if('caches' in window){
+  caches.keys().then(function(k){ row('الذاكرة المحفوظة', k.join(' , ')||'فارغة') });
+}
+
+if(hasSW){
+  navigator.serviceWorker.getRegistration().then(function(reg){
+    if(!reg){ row('تسجيل SW','غير مسجّل','bad'); return }
+    row('تسجيل SW','مسجّل — '+reg.scope.replace(location.origin,''),'ok');
+    row('يتحكّم بالصفحة', navigator.serviceWorker.controller?'نعم':'لا (يحتاج تحديثًا)',
+        navigator.serviceWorker.controller?'ok':'warn');
+    row('حالة SW', (reg.active?'active ':'')+(reg.waiting?'waiting ':'')+(reg.installing?'installing':''));
+    return reg.pushManager.getSubscription();
+  }).then(function(s){
+    if(s===undefined)return;
+    row('اشتراك محفوظ', s?('نعم — '+s.endpoint.slice(0,45)+'…'):'لا', s?'ok':'warn');
+  }).catch(function(e){ row('فحص SW','خطأ: '+e.name,'bad') });
+}
+
+fetch(PUSH_URL+'/vapid').then(function(r){return r.json()}).then(function(v){
+  row('خادم الإشعارات','يعمل — '+v.key.slice(0,18)+'…','ok');
+}).catch(function(e){ row('خادم الإشعارات','تعذّر الوصول: '+e.name,'bad') });
+
+document.getElementById('ask').addEventListener('click',function(){
+  log('قبل الطلب: '+Notification.permission);
+  var p;
+  try{
+    p=Notification.requestPermission(function(res){ log('callback -> '+res) });
+  }catch(e){ log('استثناء فوري: '+e.name+' - '+e.message); return }
+  if(p&&p.then){
+    p.then(function(res){ log('promise -> '+res+'  |  الحالة الآن: '+Notification.permission) })
+     .catch(function(e){ log('promise رفض: '+e.name+' - '+e.message) });
+  }else{
+    log('لم يُعِد وعدًا (واجهة قديمة)');
+  }
+});
+
+function b64(s){
+  var pad='='.repeat((4-s.length%4)%4), b=(s+pad).replace(/-/g,'+').replace(/_/g,'/'),
+      raw=atob(b), o=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++)o[i]=raw.charCodeAt(i);
+  return o;
+}
+document.getElementById('sub').addEventListener('click',function(){
+  if(Notification.permission!=='granted'){ log('لا يمكن - الإذن ليس granted (الحالة: '+Notification.permission+')'); return }
+  log('1) جلب المفتاح...');
+  fetch(PUSH_URL+'/vapid').then(function(r){return r.json()}).then(function(v){
+    log('2) المفتاح وصل. انتظار SW...');
+    return navigator.serviceWorker.ready.then(function(reg){
+      log('3) SW جاهز. طلب الاشتراك...');
+      return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64(v.key)});
+    });
+  }).then(function(s){
+    log('4) نجح الاشتراك: '+s.endpoint.slice(0,50)+'...');
+    return fetch(PUSH_URL+'/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({subscription:{endpoint:s.endpoint},lat:31.7683,lng:35.2137,
+        tz:-new Date().getTimezoneOffset()/60,prefs:{prayers:true}})}).then(function(r){return r.json()});
+  }).then(function(j){
+    log('5) حُفظ في الخادم: '+JSON.stringify(j));
+    log('OK - كل شيء يعمل');
+  }).catch(function(e){
+    log('FAIL: '+e.name+' - '+e.message);
+  });
+});
+</script>
+</body>
+</html>

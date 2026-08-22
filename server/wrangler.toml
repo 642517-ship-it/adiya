@@ -4,11 +4,11 @@ compatibility_date = "2026-01-01"
 
 [[kv_namespaces]]
 binding = "SUBS"
-id = "PUT_YOUR_KV_NAMESPACE_ID_HERE"
+id = "bf25129dd2804a238a464f14de12bdf1"
 
 [triggers]
 crons = ["*/5 * * * *"]
 
 [vars]
 VAPID_SUBJECT = "mailto:everest800@gmail.com"
-VAPID_PUBLIC_KEY = "PUT_YOUR_VAPID_PUBLIC_KEY_HERE"
+VAPID_PUBLIC_KEY = "BPpM9sPC3AIeiZLve3TCHEGRZwEgG6YqoLIjmmBMBL21ELth_oNE7rF5EpasnqrfQN6GJNL7D3v4EJqQ6CXY_7w"

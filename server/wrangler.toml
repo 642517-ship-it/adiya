@@ -11,4 +11,4 @@ crons = ["*/5 * * * *"]
 
 [vars]
 VAPID_SUBJECT = "mailto:everest800@gmail.com"
-VAPID_PUBLIC_KEY = "BPpM9sPC3AIeiZLve3TCHEGRZwEgG6YqoLIjmmBMBL21ELth_oNE7rF5EpasnqrfQN6GJNL7D3v4EJqQ6CXY_7w"
+VAPID_PUBLIC_KEY = "BFz7Al3L0lkhYX9oh7m-YXTVdi9BbEyye5qg_hgGGx5sI2EtHOnZw2CLeOWqvHX6-4Lk4b9Gh2EWlkyps0b2cug"

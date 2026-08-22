@@ -698,22 +698,33 @@ function resyncPush(){
   navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
     .then(function(sub){if(sub)sendSubscription(sub)}).catch(function(){});
 }
+function afterPerm(perm){
+  if(perm!=='granted'){
+    setNotifUI(false, perm==='denied'
+      ? 'رُفض الإذن. أعد ضبطه من إعدادات الموقع في المتصفّح.'
+      : 'لم يُمنح الإذن بعد.');
+    return;
+  }
+  enableNotifs();
+}
+
 function enableNotifs(){
   if(!PUSH_URL){setNotifUI(false,'خادم الإشعارات غير مضبوط بعد.');return}
   notifBtn.disabled=true;notifState.textContent='جارٍ التفعيل…';
-  Notification.requestPermission().then(function(perm){
-    if(perm!=='granted'){notifBtn.disabled=false;setNotifUI(false,'لم يُسمح بالإشعارات.');return}
-    return fetch(PUSH_URL+'/vapid').then(function(r){return r.json()}).then(function(v){
-      return navigator.serviceWorker.ready.then(function(reg){
-        return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToU8(v.key)});
-      });
-    }).then(function(sub){
-      return shareLocWithSW().then(function(){return sendSubscription(sub)});
-    }).then(function(){
-      notifBtn.disabled=false;setNotifUI(true,'الإشعارات مفعّلة — '+LOC.name);
+  fetch(PUSH_URL+'/vapid').then(function(r){return r.json()}).then(function(v){
+    return navigator.serviceWorker.ready.then(function(reg){
+      return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToU8(v.key)});
     });
-  }).catch(function(){notifBtn.disabled=false;setNotifUI(false,'تعذّر التفعيل.')});
+  }).then(function(sub){
+    return shareLocWithSW().then(function(){return sendSubscription(sub)});
+  }).then(function(){
+    notifBtn.disabled=false;setNotifUI(true,'الإشعارات مفعّلة — '+LOC.name);
+  }).catch(function(err){
+    notifBtn.disabled=false;
+    setNotifUI(false,'تعذّر التفعيل: '+(err&&err.name?err.name:'خطأ غير معروف'));
+  });
 }
+
 function disableNotifs(){
   notifBtn.disabled=true;
   navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
@@ -741,8 +752,25 @@ if(!pushSupported()){
       setNotifUI(on,on?('الإشعارات مفعّلة — '+LOC.name):'');
     }).catch(function(){});
   notifBtn.addEventListener('click',function(){
-    navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
-      .then(function(sub){sub?disableNotifs():enableNotifs()});
+    if(!PUSH_URL){setNotifUI(false,'خادم الإشعارات غير مضبوط بعد.');return}
+
+    /* الإذن محظور سابقًا — لا يمكن السؤال ثانيةً برمجيًّا */
+    if(Notification.permission==='denied'){
+      setNotifUI(false,'الإشعارات محظورة لهذا الموقع. أعد ضبطها من إعدادات الموقع في المتصفّح ثم أعد المحاولة.');
+      return;
+    }
+
+    /* الإذن ممنوح — بدّل الحالة */
+    if(Notification.permission==='granted'){
+      navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
+        .then(function(sub){sub?disableNotifs():enableNotifs()});
+      return;
+    }
+
+    /* أوّل مرّة: يجب طلب الإذن هنا مباشرةً، داخل الضغطة نفسها */
+    var p;
+    try{ p=Notification.requestPermission(afterPerm) }catch(e){}
+    if(p&&p.then)p.then(afterPerm);
   });
   prefsBox.addEventListener('change',function(){
     readPrefs();
@@ -761,7 +789,12 @@ if('serviceWorker' in navigator){
 var deferredPrompt=null,installBtn=document.getElementById('installBtn');
 window.addEventListener('beforeinstallprompt',function(e){
   e.preventDefault();deferredPrompt=e;installBtn.hidden=false;
+  installBtn.textContent='تثبيت التطبيق';
 });
+/* إن كان يعمل مثبّتًا فعلًا، أخفِ الزرّ */
+if(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches){
+  installBtn.hidden=true;
+}
 installBtn.addEventListener('click',function(){
   if(!deferredPrompt)return;
   deferredPrompt.prompt();

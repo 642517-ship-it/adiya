@@ -68,6 +68,14 @@ input[type=search]::placeholder{color:var(--muted)}
 #moreBtn{padding:11px 26px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--text);font:inherit;font-size:15px;cursor:pointer;transition:.15s}
 #moreBtn:hover{border-color:var(--accent);color:var(--accent)}
 #batchInfo{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.notif{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:12px}
+#notifBtn{padding:9px 20px;background:var(--panel);border:1px solid var(--line);border-radius:999px;color:var(--text);font:inherit;font-size:14px;cursor:pointer;transition:.15s}
+#notifBtn:hover{border-color:var(--accent);color:var(--accent)}
+#notifBtn[disabled]{opacity:.5;cursor:default}
+#notifState{font-size:13px;color:var(--muted)}
+.prefs{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;max-width:340px}
+.prefs label{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted);cursor:pointer}
+.prefs input{accent-color:var(--accent);width:15px;height:15px}
 .mood{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px}
 .mood label{font-size:14px;color:var(--muted)}
 #mood{padding:8px 14px;background:var(--panel);border:1px solid var(--line);border-radius:999px;color:var(--text);font:inherit;font-size:14px;cursor:pointer;max-width:220px}
@@ -120,6 +128,17 @@ input[type=search]::placeholder{color:var(--muted)}
       <button id='geoBtn'>تحديد موقعي</button>
       <button id='geoReset'>القدس</button>
       <button id='installBtn' hidden>تثبيت التطبيق</button>
+    </div>
+    <div class='notif'>
+      <button id='notifBtn'>تفعيل الإشعارات</button>
+      <span id='notifState'></span>
+      <div class='prefs' id='prefs' hidden>
+        <label><input type='checkbox' data-pref='prayers' checked> الصلوات الخمس</label>
+        <label><input type='checkbox' data-pref='morning' checked> أذكار الصباح</label>
+        <label><input type='checkbox' data-pref='evening' checked> أذكار المساء</label>
+        <label><input type='checkbox' data-pref='sleep'> أذكار النوم</label>
+        <label><input type='checkbox' data-pref='tahajjud'> قيام الليل</label>
+      </div>
     </div>
     <div class='mood'>
       <label for='mood'>كيف تشعر الآن؟</label>
@@ -531,12 +550,12 @@ document.getElementById('geoBtn').addEventListener('click',function(){
   b.textContent='جارٍ التحديد…';
   navigator.geolocation.getCurrentPosition(function(pos){
     LOC={lat:pos.coords.latitude,lng:pos.coords.longitude,name:'موقعي'};
-    saveLoc();b.textContent='تحديد موقعي';renderToday();
+    saveLoc();b.textContent='تحديد موقعي';renderToday();resyncPush();
   },function(){b.textContent='تعذّر التحديد';setTimeout(function(){b.textContent='تحديد موقعي'},2000)},
   {timeout:8000,maximumAge:864e5});
 });
 document.getElementById('geoReset').addEventListener('click',function(){
-  LOC={lat:31.7683,lng:35.2137,name:'القدس'};saveLoc();renderToday();
+  LOC={lat:31.7683,lng:35.2137,name:'القدس'};saveLoc();renderToday();resyncPush();
 });
 document.getElementById('moreBtn').addEventListener('click',function(){state.bump++;renderBatch();window.scrollTo({top:0,behavior:'smooth'})});
 setInterval(function(){if(!document.getElementById('viewToday').hidden)renderToday()},60000);
@@ -621,6 +640,117 @@ function boot(){
   });
 }
 boot();
+
+/* ---- الإشعارات ---- */
+var PUSH_URL='';           /* عنوان الـ Worker — يُملأ بعد النشر */
+var notifBtn=document.getElementById('notifBtn'),
+    notifState=document.getElementById('notifState'),
+    prefsBox=document.getElementById('prefs');
+
+function loadPrefs(){
+  var p={prayers:true,morning:true,evening:true,sleep:false,tahajjud:false};
+  try{var v=JSON.parse(localStorage.getItem('adiya:prefs')||'null');if(v)p=v}catch(e){}
+  [].forEach.call(prefsBox.querySelectorAll('input'),function(i){i.checked=!!p[i.dataset.pref]});
+  return p;
+}
+function readPrefs(){
+  var p={};
+  [].forEach.call(prefsBox.querySelectorAll('input'),function(i){p[i.dataset.pref]=i.checked});
+  try{localStorage.setItem('adiya:prefs',JSON.stringify(p))}catch(e){}
+  return p;
+}
+function urlB64ToU8(s){
+  var pad='='.repeat((4-s.length%4)%4),
+      b=(s+pad).replace(/-/g,'+').replace(/_/g,'/'),
+      raw=atob(b),out=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);
+  return out;
+}
+function pushSupported(){
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+function setNotifUI(on,msg){
+  notifBtn.textContent=on?'إيقاف الإشعارات':'تفعيل الإشعارات';
+  notifState.textContent=msg||'';
+  prefsBox.hidden=!on;
+}
+function shareLocWithSW(){
+  if(!('caches' in window))return Promise.resolve();
+  return caches.open('adiya-conf').then(function(c){
+    return c.put('conf/loc', new Response(JSON.stringify({lat:LOC.lat,lng:LOC.lng,name:LOC.name}),
+      {headers:{'Content-Type':'application/json'}}));
+  }).catch(function(){});
+}
+function sendSubscription(sub){
+  return fetch(PUSH_URL+'/subscribe',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      subscription:{endpoint:sub.endpoint},
+      lat:LOC.lat,lng:LOC.lng,
+      tz:-new Date().getTimezoneOffset()/60,
+      prefs:readPrefs()
+    })
+  }).then(function(r){return r.json()});
+}
+function resyncPush(){
+  if(!PUSH_URL||!('serviceWorker' in navigator))return;
+  shareLocWithSW();
+  navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
+    .then(function(sub){if(sub)sendSubscription(sub)}).catch(function(){});
+}
+function enableNotifs(){
+  if(!PUSH_URL){setNotifUI(false,'خادم الإشعارات غير مضبوط بعد.');return}
+  notifBtn.disabled=true;notifState.textContent='جارٍ التفعيل…';
+  Notification.requestPermission().then(function(perm){
+    if(perm!=='granted'){notifBtn.disabled=false;setNotifUI(false,'لم يُسمح بالإشعارات.');return}
+    return fetch(PUSH_URL+'/vapid').then(function(r){return r.json()}).then(function(v){
+      return navigator.serviceWorker.ready.then(function(reg){
+        return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToU8(v.key)});
+      });
+    }).then(function(sub){
+      return shareLocWithSW().then(function(){return sendSubscription(sub)});
+    }).then(function(){
+      notifBtn.disabled=false;setNotifUI(true,'الإشعارات مفعّلة — '+LOC.name);
+    });
+  }).catch(function(){notifBtn.disabled=false;setNotifUI(false,'تعذّر التفعيل.')});
+}
+function disableNotifs(){
+  notifBtn.disabled=true;
+  navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
+  .then(function(sub){
+    if(!sub)return;
+    var ep=sub.endpoint;
+    return sub.unsubscribe().then(function(){
+      if(!PUSH_URL)return;
+      return fetch(PUSH_URL+'/unsubscribe',{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:ep})});
+    });
+  }).then(function(){notifBtn.disabled=false;setNotifUI(false,'الإشعارات متوقّفة.')})
+  .catch(function(){notifBtn.disabled=false});
+}
+
+if(!pushSupported()){
+  notifBtn.disabled=true;
+  notifState.textContent='هذا المتصفّح لا يدعم الإشعارات.';
+  prefsBox.hidden=true;
+}else{
+  loadPrefs();
+  navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
+    .then(function(sub){
+      var on=!!sub&&Notification.permission==='granted';
+      setNotifUI(on,on?('الإشعارات مفعّلة — '+LOC.name):'');
+    }).catch(function(){});
+  notifBtn.addEventListener('click',function(){
+    navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
+      .then(function(sub){sub?disableNotifs():enableNotifs()});
+  });
+  prefsBox.addEventListener('change',function(){
+    readPrefs();
+    if(!PUSH_URL)return;
+    navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
+      .then(function(sub){if(sub)sendSubscription(sub)});
+  });
+}
 
 /* ---- PWA ---- */
 if('serviceWorker' in navigator){

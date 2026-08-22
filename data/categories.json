@@ -85,6 +85,11 @@
     "kind": "topic"
   },
   {
+    "id": "adhan",
+    "name": "أذكار الأذان",
+    "kind": "topic"
+  },
+  {
     "id": "after-prayer",
     "name": "أذكار بعد الصلاة",
     "kind": "topic"
@@ -102,6 +107,11 @@
   {
     "id": "home",
     "name": "أذكار المنزل",
+    "kind": "topic"
+  },
+  {
+    "id": "khala",
+    "name": "أذكار الخلاء",
     "kind": "topic"
   },
   {

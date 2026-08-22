@@ -68,6 +68,7 @@ input[type=search]::placeholder{color:var(--muted)}
 #moreBtn{padding:11px 26px;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--text);font:inherit;font-size:15px;cursor:pointer;transition:.15s}
 #moreBtn:hover{border-color:var(--accent);color:var(--accent)}
 #batchInfo{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+#locName{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .notif{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:12px}
 #notifBtn{padding:9px 20px;background:var(--panel);border:1px solid var(--line);border-radius:999px;color:var(--text);font:inherit;font-size:14px;cursor:pointer;transition:.15s}
 #notifBtn:hover{border-color:var(--accent);color:var(--accent)}
@@ -549,7 +550,8 @@ document.getElementById('geoBtn').addEventListener('click',function(){
   if(!navigator.geolocation){b.textContent='غير مدعوم';return}
   b.textContent='جارٍ التحديد…';
   navigator.geolocation.getCurrentPosition(function(pos){
-    LOC={lat:pos.coords.latitude,lng:pos.coords.longitude,name:'موقعي'};
+    LOC={lat:pos.coords.latitude,lng:pos.coords.longitude,
+         name:'موقعي '+pos.coords.latitude.toFixed(3)+'°, '+pos.coords.longitude.toFixed(3)+'°'};
     saveLoc();b.textContent='تحديد موقعي';renderToday();resyncPush();
   },function(){b.textContent='تعذّر التحديد';setTimeout(function(){b.textContent='تحديد موقعي'},2000)},
   {timeout:8000,maximumAge:864e5});

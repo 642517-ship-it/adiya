@@ -1,7 +1,8 @@
 /* الأدعية — service worker */
-var VERSION='adiya-v4';
+var VERSION='adiya-v6';
 var SHELL=['./','./index.html','./manifest.json','./icons/icon-192.png','./icons/icon-512.png'];
 var DATA=['./data/duas.json','./data/categories.json'];
+var NET_TIMEOUT=2500;
 
 self.addEventListener('install',function(e){
   e.waitUntil(caches.open(VERSION).then(function(c){
@@ -15,12 +16,33 @@ self.addEventListener('activate',function(e){
   }).then(function(){return self.clients.claim()}));
 });
 
-function networkFirst(req){
+function fromNet(req){
   return fetch(req).then(function(res){
     if(res&&res.ok){var c=res.clone();caches.open(VERSION).then(function(k){k.put(req,c)})}
     return res;
-  }).catch(function(){
-    return caches.match(req).then(function(hit){return hit||caches.match('./index.html')});
+  });
+}
+
+function cacheFirst(req){
+  return caches.match(req).then(function(hit){
+    if(hit){fromNet(req).catch(function(){});return hit}
+    return fromNet(req).catch(function(){return caches.match('./index.html')});
+  });
+}
+
+/* الشبكة أوّلًا بمهلة: إن تأخّرت تُقدَّم النسخة المحفوظة فورًا */
+function netFirstTimed(req){
+  return caches.match(req).then(function(hit){
+    if(!hit)return fromNet(req);
+    return new Promise(function(resolve){
+      var done=false;
+      var timer=setTimeout(function(){if(!done){done=true;resolve(hit)}},NET_TIMEOUT);
+      fromNet(req).then(function(res){
+        if(!done){done=true;clearTimeout(timer);resolve(res)}
+      }).catch(function(){
+        if(!done){done=true;clearTimeout(timer);resolve(hit)}
+      });
+    });
   });
 }
 
@@ -29,18 +51,8 @@ self.addEventListener('fetch',function(e){
   if(req.method!=='GET')return;
   var url=new URL(req.url);
   if(url.origin!==location.origin)return;
-
   var isDoc=req.mode==='navigate'||/\/$|\.html$/.test(url.pathname);
   var isData=url.pathname.indexOf('/data/')>=0;
-
-  /* الصفحة والبيانات: من الشبكة أوّلًا حتى لا تعلق نسخة قديمة */
-  if(isDoc||isData){e.respondWith(networkFirst(req));return}
-
-  /* الأيقونات: من الذاكرة أوّلًا */
-  e.respondWith(caches.match(req).then(function(hit){
-    return hit||fetch(req).then(function(res){
-      if(res&&res.ok){var c=res.clone();caches.open(VERSION).then(function(k){k.put(req,c)})}
-      return res;
-    });
-  }));
+  if(isDoc||isData){e.respondWith(netFirstTimed(req));return}
+  e.respondWith(cacheFirst(req));
 });

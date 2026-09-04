@@ -127,7 +127,7 @@ input[type=search]::placeholder{color:var(--muted)}
     <div class='adjust'>
       <span id='locName'></span>
       <button id='geoBtn'>تحديد موقعي</button>
-      <button id='geoReset'>القدس</button>
+      <button id='geoReset' hidden>رجوع إلى القدس</button>
       <button id='installBtn' hidden>تثبيت التطبيق</button>
     </div>
     <div class='notif'>
@@ -397,6 +397,7 @@ function renderToday(){
   document.getElementById('clockLabel').textContent=timeLabel(t,p);
   renderPrayers(p,t);
   document.getElementById('locName').textContent=LOC.name;
+  document.getElementById('geoReset').hidden=(LOC.name==='القدس');
   document.getElementById('offText').textContent=state.off?'('+(state.off>0?'+':'')+state.off+')':'';
 
   var occ=occasionOf(h,g),tc=timeCats(t,p);
@@ -405,7 +406,8 @@ function renderToday(){
     '<span class="badge">'+esc(timeLabel(t,p))+'</span>';
 
   var seen={},pool=[],occRows=[];
-  if(occ.cats.length){
+  var moodOn=!!state.mood;
+  if(occ.cats.length&&!moodOn){
     occRows=state.duas.filter(function(d){
       return d.categories.some(function(c){return occ.cats.indexOf(c)>=0});
     });
@@ -710,6 +712,49 @@ function afterPerm(perm){
   enableNotifs();
 }
 
+function wantsNotifs(){
+  try{return localStorage.getItem('adiya:notif')==='on'}catch(e){return false}
+}
+function rememberNotifs(v){
+  try{localStorage.setItem('adiya:notif',v?'on':'off')}catch(e){}
+}
+
+/* يتحقّق من الاشتراك عند كل فتح، ويعيد إنشاءه تلقائيًّا إن فقده المتصفّح */
+function ensureSubscription(){
+  if(!('serviceWorker' in navigator)){setNotifUI(false,'');return}
+  var timer=setTimeout(function(){
+    if(notifState.textContent==='جارٍ التحقّق…')
+      setNotifUI(wantsNotifs(),wantsNotifs()?'الإشعارات مفعّلة':'');
+  },4000);
+
+  navigator.serviceWorker.ready
+    .then(function(reg){return reg.pushManager.getSubscription()})
+    .then(function(sub){
+      clearTimeout(timer);
+      if(Notification.permission!=='granted'){
+        setNotifUI(false, wantsNotifs()?'الإشعارات متوقّفة — الإذن غير ممنوح.':'');
+        return;
+      }
+      if(sub){
+        setNotifUI(true,'الإشعارات مفعّلة — '+LOC.name);
+        shareLocWithSW();
+        if(PUSH_URL)sendSubscription(sub).catch(function(){});
+        rememberNotifs(true);
+        return;
+      }
+      if(wantsNotifs()&&PUSH_URL){
+        notifState.textContent='إعادة ربط الإشعارات…';
+        enableNotifs();
+      }else{
+        setNotifUI(false,'');
+      }
+    })
+    .catch(function(){
+      clearTimeout(timer);
+      setNotifUI(wantsNotifs(),wantsNotifs()?'الإشعارات مفعّلة':'');
+    });
+}
+
 function enableNotifs(){
   if(!PUSH_URL){setNotifUI(false,'خادم الإشعارات غير مضبوط بعد.');return}
   notifBtn.disabled=true;notifState.textContent='جارٍ التفعيل…';
@@ -720,7 +765,7 @@ function enableNotifs(){
   }).then(function(sub){
     return shareLocWithSW().then(function(){return sendSubscription(sub)});
   }).then(function(){
-    notifBtn.disabled=false;setNotifUI(true,'الإشعارات مفعّلة — '+LOC.name);
+    notifBtn.disabled=false;rememberNotifs(true);setNotifUI(true,'الإشعارات مفعّلة — '+LOC.name);
   }).catch(function(err){
     notifBtn.disabled=false;
     setNotifUI(false,'تعذّر التفعيل: '+(err&&err.name?err.name:'خطأ غير معروف'));
@@ -738,7 +783,7 @@ function disableNotifs(){
       return fetch(PUSH_URL+'/unsubscribe',{method:'POST',
         headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:ep})});
     });
-  }).then(function(){notifBtn.disabled=false;setNotifUI(false,'الإشعارات متوقّفة.')})
+  }).then(function(){notifBtn.disabled=false;rememberNotifs(false);setNotifUI(false,'الإشعارات متوقّفة.')})
   .catch(function(){notifBtn.disabled=false});
 }
 
@@ -748,11 +793,8 @@ if(!pushSupported()){
   prefsBox.hidden=true;
 }else{
   loadPrefs();
-  navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()})
-    .then(function(sub){
-      var on=!!sub&&Notification.permission==='granted';
-      setNotifUI(on,on?('الإشعارات مفعّلة — '+LOC.name):'');
-    }).catch(function(){});
+  notifState.textContent='جارٍ التحقّق…';
+  ensureSubscription();
   notifBtn.addEventListener('click',function(){
     if(!PUSH_URL){setNotifUI(false,'خادم الإشعارات غير مضبوط بعد.');return}
 
